@@ -66,7 +66,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         <div className="brand">
           <span className="brand__mark" aria-hidden>◆</span>
           <span className="brand__name">JEV<span className="brand__slash">/</span>AGENT</span>
-          <span className="brand__sub">paper trading · Hyperliquid perps · decisions by {p.status.jev === "jev" ? "Jev" : "mock Jev"}</span>
+          <span className="brand__sub">paper trading · Hyperliquid perps · decisions by {p.status.decider ?? (p.status.jev === "jev" ? "Jev" : "mock Jev")}</span>
         </div>
         <div className="status">
           {p.status.kill && <span className="badge badge--critical">⛔ KILL SWITCH ARMED</span>}
@@ -123,6 +123,28 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         <Stat label="Best / worst trade" value={`${t.best === null ? "—" : signedUsd(t.best)}`}
           sub={`worst ${t.worst === null ? "—" : signedUsd(t.worst)}`} v={t.best ?? undefined} />
       </section>
+
+      {p.readiness && (
+        <section className="panel readiness">
+          <h2>
+            Go-live readiness{" "}
+            <span className={`badge ${p.readiness.ready ? "badge--live" : "badge--offline"}`}>
+              {p.readiness.ready ? "✓ READY" : `${p.readiness.passed}/${p.readiness.total} checks`}
+            </span>
+            <span className="panel__hint">every check must pass before real money · strategy: {p.readiness.strategy}</span>
+          </h2>
+          <div className="checks">
+            {p.readiness.checks.map((c) => (
+              <div key={c.key} className={`check ${c.pass ? "check--pass" : "check--fail"}`}>
+                <span className="check__icon" aria-hidden>{c.pass ? "✓" : "✗"}</span>
+                <span className="check__label">{c.label}</span>
+                <span className="check__value">{c.display}</span>
+                <span className="check__threshold">need {c.threshold}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {p.daily.length > 0 && (
         <section className="panel">

@@ -75,8 +75,16 @@ export type Performance = {
   daily: { day: string; pnl: number; equity: number }[];
   recent_fills: Fill[];
   recent_trades: ClosedTrade[];
+  readiness?: {
+    ready: boolean;
+    passed: number;
+    total: number;
+    strategy: string;
+    checks: { key: string; label: string; threshold: string; pass: boolean; display: string }[];
+  };
   status: {
     step?: number;
+    decider?: string;
     kill?: boolean;
     jev?: string;
     coins?: string[];
