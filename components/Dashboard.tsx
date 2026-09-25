@@ -124,6 +124,31 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           sub={`worst ${t.worst === null ? "—" : signedUsd(t.worst)}`} v={t.best ?? undefined} />
       </section>
 
+      {p.status.targets && Object.keys(p.status.targets).length > 0 && (
+        <section className="panel">
+          <h2>Strategy <span className="panel__hint">{p.status.decider}</span></h2>
+          <p className="strategy__what">
+            Once a day each coin is scored on four trend horizons (10, 20, 42 and 84 days). Every horizon
+            that is up adds a quarter of the coin&apos;s position; a coin in a downtrend on all four is sold.
+            Size shrinks when a coin is volatile, so each coin carries similar risk. Long only, no leverage,
+            hard limits of 10% per coin and 50% total.
+          </p>
+          <div className="targets">
+            {Object.entries(p.status.targets).sort((a, b) => b[1] - a[1]).map(([coin, w]) => {
+              const held = p.positions.find((o) => o.coin === coin);
+              const heldW = held ? held.notional / p.equity : 0;
+              return (
+                <div key={coin} className="target">
+                  <span className="coin">{coin}</span>
+                  <div className="target__bar"><i style={{ width: `${Math.min(100, (w / 0.1) * 100)}%` }} /></div>
+                  <span className="target__num">{pct(w, 1)} target · {pct(heldW, 1)} held</span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {p.readiness && (
         <section className="panel readiness">
           <h2>

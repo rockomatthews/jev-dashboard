@@ -162,3 +162,12 @@ tr:hover td { background: rgba(120, 140, 190, 0.05); }
 .check__value { font-family: var(--mono); font-size: 13px; text-align: right; color: var(--ink); }
 .check__threshold { grid-column: 2 / span 2; font-size: 11px; color: var(--ink-3); font-family: var(--mono); }
 @media (max-width: 900px) { .checks { grid-template-columns: 1fr; } }
+
+/* ---------- strategy ---------- */
+.strategy__what { color: var(--ink-2); font-size: 14px; line-height: 1.55; margin: 0 0 12px; max-width: 820px; }
+.targets { display: grid; gap: 6px; }
+.target { display: grid; grid-template-columns: 64px 1fr 190px; align-items: center; gap: 10px; }
+.target__bar { height: 8px; background: rgba(120, 140, 190, 0.12); border-radius: 4px; overflow: hidden; }
+.target__bar i { display: block; height: 100%; background: var(--gain); border-radius: 4px; box-shadow: 0 0 10px rgba(27, 155, 208, 0.5); }
+.target__num { font-family: var(--mono); font-size: 12px; color: var(--ink-2); text-align: right; }
+@media (max-width: 600px) { .target { grid-template-columns: 52px 1fr; } .target__num { grid-column: 1 / -1; text-align: left; } }

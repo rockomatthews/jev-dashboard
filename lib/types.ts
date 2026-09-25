@@ -85,6 +85,7 @@ export type Performance = {
   status: {
     step?: number;
     decider?: string;
+    targets?: Record<string, number>;
     kill?: boolean;
     jev?: string;
     coins?: string[];
