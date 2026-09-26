@@ -271,7 +271,7 @@ function Sway({ children }: { children: React.ReactNode }) {
   return <group ref={ref}>{children}</group>;
 }
 
-export default function Scene({ perf }: { perf: Performance }) {
+export default function Scene({ perf, active = true }: { perf: Performance; active?: boolean }) {
   const { pts, amp } = useCurve(perf);
   // ?fx=0 turns off bloom/vignette (debugging, very old GPUs)
   const fx = typeof window === "undefined" || new URLSearchParams(window.location.search).get("fx") !== "0";
@@ -280,6 +280,7 @@ export default function Scene({ perf }: { perf: Performance }) {
     <Canvas
       camera={{ position: [0, 2.6, 16], fov: 42 }}
       dpr={[1, 2]}
+      frameloop={active ? "always" : "never"}
       gl={{ antialias: true, powerPreference: "high-performance" }}
       onCreated={({ gl }) => gl.setClearColor("#070a12")}
     >
