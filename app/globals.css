@@ -255,3 +255,8 @@ td a:hover { color: #ff9cec; }
 }
 .scene__layer { position: absolute; inset: 0; visibility: hidden; opacity: 0; transition: opacity 0.45s ease; }
 .scene__layer--on { visibility: visible; opacity: 1; }
+.ideas { display: grid; gap: 10px; }
+.idea { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: rgba(10, 14, 24, 0.4); }
+.idea__head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+.idea__date { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+.idea .strategy__what { margin-bottom: 4px; }

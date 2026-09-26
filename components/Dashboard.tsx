@@ -502,6 +502,25 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
 
         {isSniper && sn ? <SniperPanels p={p} sn={sn} demo={sniperDemo} now={now} /> : <TrendPanels p={p} />}
 
+        {data.perf.ideas && data.perf.ideas.length > 0 && (
+          <section className="panel">
+            <h2>Idea lab <span className="panel__hint">one new crypto trading idea researched and tested every day</span></h2>
+            <div className="ideas">
+              {[...data.perf.ideas].reverse().map((idea) => (
+                <div key={`${idea.date}-${idea.name}`} className="idea">
+                  <div className="idea__head">
+                    <span className="idea__date">{idea.date}</span>
+                    <b>{idea.name}</b>
+                    <span className="pill pill--watch">{idea.status}</span>
+                  </div>
+                  <p className="strategy__what">{idea.rule}</p>
+                  <p className="empty">{idea.verdict}{idea.sharpe !== undefined && idea.sharpe !== null ? ` · out-of-sample Sharpe ${num(idea.sharpe, 2)}` : ""} · source: {idea.source}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {p.daily.length > 0 && (
           <section className="panel">
             <h2>Daily P&amp;L <span className="panel__hint">UTC days</span></h2>

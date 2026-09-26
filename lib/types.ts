@@ -154,6 +154,7 @@ export type Performance = {
     replication?: { universe: string; sharpe: number; ci: [number, number]; p: number | null; mdd: number; buyhold_sharpe: number; buyhold_mdd: number };
   };
   sniper?: SniperInfo;
+  ideas?: { date: string; name: string; source: string; rule: string; status: string; verdict: string; sharpe?: number | null }[];
   strategies?: { sniper?: Performance };
   status: {
     step?: number;
