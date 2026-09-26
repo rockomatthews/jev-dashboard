@@ -117,7 +117,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         <Stat label="Unrealized" value={signedUsd(p.unrealized)} v={p.unrealized} sub={`${t.open} open position${t.open === 1 ? "" : "s"}`} />
         <Stat label="Fees + funding" value={signedUsd(p.funding - p.fees)} v={p.funding - p.fees}
           sub={`fees ${usd(p.fees)} · funding ${signedUsd(p.funding)}`} />
-        <Stat label="Max drawdown" value={pct(-p.max_drawdown, 2)} sub={`now ${pct(-p.current_drawdown, 2)} · limit −15%`} />
+        <Stat label="Max drawdown" value={pct(-p.max_drawdown, 2)} sub={`now ${pct(-p.current_drawdown, 2)} · kill switch ${p.risk_limits ? pct(-p.risk_limits.max_drawdown, 0) : "−15%"}`} />
         <Stat label="Win rate" value={t.win_rate === null ? "—" : pct(t.win_rate, 1)} sub={`${t.wins} W · ${t.losses} L of ${t.closed}`} />
         <Stat label="Profit factor" value={num(t.profit_factor, 2)}
           sub={`avg win ${t.avg_win === null ? "—" : usd(t.avg_win)} · avg loss ${t.avg_loss === null ? "—" : usd(t.avg_loss)}`} />
@@ -131,8 +131,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           <p className="strategy__what">
             Once a day each coin is scored on four trend horizons (10, 20, 42 and 84 days). Every horizon
             that is up adds a quarter of the coin&apos;s position; a coin in a downtrend on all four is sold.
-            Size shrinks when a coin is volatile, so each coin carries similar risk. Long only, no leverage,
-            hard limits of 10% per coin and 50% total.
+            Size shrinks when a coin is volatile, so each coin carries similar risk. Long only, no leverage
+            {p.risk_limits ? `, risk setting ${num(p.risk_limits.vol_target ?? 0, 1)}, max ${pct(p.risk_limits.max_position_frac, 0)} per coin and ${pct(p.risk_limits.max_gross_frac, 0)} invested` : ""}.
           </p>
           <div className="targets">
             {Object.entries(p.status.targets).sort((a, b) => b[1] - a[1]).map(([coin, w]) => {
