@@ -1,5 +1,6 @@
 import { Redis } from "@upstash/redis";
 import demo from "./demo-perf.json";
+import snapshot from "./snapshot.json";
 import type { Performance, PerfResponse } from "./types";
 
 const KEY = "jev:perf:latest";
@@ -31,5 +32,9 @@ export async function loadPerformance(): Promise<PerfResponse> {
       console.error("redis read failed", err);
     }
   }
+  // No Redis yet: use the snapshot the bot's watchdog commits to lib/snapshot.json every ~30 min
+  // (each commit redeploys the site, so the bundled copy is always the latest one).
+  const snap = snapshot as unknown as Performance;
+  if (snap?.schema === 1) return { source: "snapshot", received_ms: snap.updated_ms, perf: snap };
   return { source: "demo", received_ms: null, perf: demo as unknown as Performance };
 }

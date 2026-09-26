@@ -53,8 +53,9 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const p = data.perf;
   const t = p.trades;
   const age = now - p.updated_ms;
-  const state = data.source === "demo" ? "demo" : age > STALE_AFTER_MS ? "offline" : "live";
-  const stateLabel = { live: "LIVE", offline: "OFFLINE", demo: "DEMO DATA" }[state];
+  const staleAfter = data.source === "snapshot" ? 90 * 60_000 : STALE_AFTER_MS;
+  const state = data.source === "demo" ? "demo" : age > staleAfter ? "offline" : "live";
+  const stateLabel = { live: data.source === "snapshot" ? "LIVE · 30-MIN SNAPSHOTS" : "LIVE", offline: "OFFLINE", demo: "DEMO DATA" }[state];
 
   const dailyMax = useMemo(() => Math.max(1, ...p.daily.map((d) => Math.abs(d.pnl))), [p.daily]);
   const prices = Object.entries(p.status.prices ?? {});
@@ -146,6 +147,77 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               );
             })}
           </div>
+        </section>
+      )}
+
+      {p.research && (
+        <section className="panel">
+          <h2>Testing <span className="panel__hint">every strategy is scored only on data it was not tuned on, after fees, slippage and funding</span></h2>
+          {p.research.study && (
+            <>
+              <p className="strategy__what">
+                <b>Edge study</b> · {p.research.study.coins.length} coins · daily bars · out of sample {p.research.study.strategies[0]?.oos_from} → {p.research.study.to}
+                {" "}· {p.research.study.configs} configurations tried. <b>{p.research.study.verdict}</b>
+              </p>
+              <table>
+                <thead><tr><th>Strategy</th><th className="r">Sharpe</th><th className="r">95% range</th><th className="r">Beats random (p)</th><th className="r">Return/yr</th><th className="r">Worst drawdown</th><th className="r">Pass</th></tr></thead>
+                <tbody>
+                  {[...p.research.study.strategies].sort((a, b) => b.sharpe - a.sharpe).map((st) => (
+                    <tr key={st.name} className={st.name === p.readiness?.strategy ? "row--live" : ""}>
+                      <td className="coin">{st.name}{st.name === p.readiness?.strategy ? " ◀ trading" : ""}</td>
+                      <td className="r">{num(st.sharpe, 2)}</td>
+                      <td className="r muted">{num(st.ci[0], 2)} … {num(st.ci[1], 2)}</td>
+                      <td className="r">{st.p === null ? "—" : num(st.p, 3)}</td>
+                      <td className="r"><Pol v={st.cagr}>{pct(st.cagr, 1, true)}</Pol></td>
+                      <td className="r">{pct(-st.mdd, 1)}</td>
+                      <td className="r">{st.pass ? "✓" : "✗"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+          <div className="grid2 grid2--tight">
+            {p.research.replication && (
+              <div className="subpanel">
+                <h3>Replication on unseen coins</h3>
+                <p className="strategy__what">{p.research.replication.universe}: Sharpe <b>{num(p.research.replication.sharpe, 2)}</b> (range {num(p.research.replication.ci[0], 2)} … {num(p.research.replication.ci[1], 2)}), beats random p = {num(p.research.replication.p, 3)}, worst drawdown {pct(-p.research.replication.mdd, 1)} vs buy &amp; hold Sharpe {num(p.research.replication.buyhold_sharpe, 2)} / {pct(-p.research.replication.buyhold_mdd, 1)}.</p>
+              </div>
+            )}
+            {p.research.new_strategy && (
+              <div className="subpanel">
+                <h3>Newest strategy tested: {p.research.new_strategy.name}</h3>
+                <p className="strategy__what">{p.research.new_strategy.rule} Source: {p.research.new_strategy.source}. Out of sample {p.research.new_strategy.period}: Sharpe <b>{num(p.research.new_strategy.sharpe, 2)}</b>, return {pct(p.research.new_strategy.cagr, 1, true)}/yr. <b>{p.research.new_strategy.verdict}</b></p>
+              </div>
+            )}
+          </div>
+          {p.research.risk_scaling && (
+            <>
+              <h3 className="h3">Risk dial <span className="panel__hint">{p.research.risk_scaling_note}</span></h3>
+              <table>
+                <thead><tr><th>Risk setting</th><th className="r">Return/yr</th><th className="r">Volatility</th><th className="r">Sharpe</th><th className="r">Worst drawdown</th><th className="r">Worst day</th><th className="r">Max invested</th></tr></thead>
+                <tbody>
+                  {p.research.risk_scaling.map((r) => {
+                    const live = p.risk_limits?.vol_target !== undefined && p.risk_limits?.vol_target !== null && Math.abs(r.vol_target - p.risk_limits.vol_target) < 1e-6;
+                    return (
+                      <tr key={r.vol_target} className={live ? "row--live" : ""}>
+                        <td className="coin">{num(r.vol_target, 1)}{live ? " ◀ now" : ""}</td>
+                        <td className="r">{pct(r.cagr, 1, true)}</td>
+                        <td className="r muted">{pct(r.vol, 1)}</td>
+                        <td className="r">{num(r.sharpe, 2)}</td>
+                        <td className="r">{pct(-r.mdd, 1)}</td>
+                        <td className="r">{pct(r.worst_day, 1)}</td>
+                        <td className="r muted">{pct(r.gross_max, 0)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </>
+          )}
+          {p.risk_limits && (
+            <p className="empty">Hard limits now: kill switch at {pct(-p.risk_limits.max_drawdown, 0)} drawdown · daily loss stop {pct(-p.risk_limits.max_daily_loss, 0)} · max {pct(p.risk_limits.max_position_frac, 0)} per coin · max {pct(p.risk_limits.max_gross_frac, 0)} invested.</p>
+          )}
         </section>
       )}
 

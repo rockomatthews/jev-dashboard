@@ -171,3 +171,10 @@ tr:hover td { background: rgba(120, 140, 190, 0.05); }
 .target__bar i { display: block; height: 100%; background: var(--gain); border-radius: 4px; box-shadow: 0 0 10px rgba(27, 155, 208, 0.5); }
 .target__num { font-family: var(--mono); font-size: 12px; color: var(--ink-2); text-align: right; }
 @media (max-width: 600px) { .target { grid-template-columns: 52px 1fr; } .target__num { grid-column: 1 / -1; text-align: left; } }
+
+/* ---------- testing ---------- */
+.row--live td { background: rgba(27, 155, 208, 0.08); }
+.subpanel { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: rgba(10, 14, 24, 0.4); }
+.subpanel h3, .h3 { font-size: 13px; color: var(--ink); margin: 0 0 6px; font-weight: 600; }
+.h3 { margin-top: 16px; }
+.grid2--tight { margin: 14px 0 4px; }

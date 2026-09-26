@@ -82,6 +82,17 @@ export type Performance = {
     strategy: string;
     checks: { key: string; label: string; threshold: string; pass: boolean; display: string }[];
   };
+  risk_limits?: { max_drawdown: number; max_daily_loss: number; max_position_frac: number; max_gross_frac: number; vol_target: number | null };
+  research?: {
+    study?: {
+      verdict: string; interval: string; coins: string[]; from: string; to: string; configs: number;
+      strategies: { name: string; sharpe: number; ci: [number, number]; p: number | null; cagr: number; mdd: number; oos_from: string; oos_to: string; pass: boolean }[];
+    };
+    risk_scaling?: { vol_target: number; cagr: number; vol: number; sharpe: number; mdd: number; worst_day: number; gross_max: number }[];
+    risk_scaling_note?: string;
+    new_strategy?: { name: string; source: string; rule: string; period: string; sharpe: number; ci: [number, number]; cagr: number; mdd: number; p: number | null; verdict: string };
+    replication?: { universe: string; sharpe: number; ci: [number, number]; p: number | null; mdd: number; buyhold_sharpe: number; buyhold_mdd: number };
+  };
   status: {
     step?: number;
     decider?: string;
@@ -96,7 +107,7 @@ export type Performance = {
 };
 
 export type PerfResponse = {
-  source: "live" | "demo";
+  source: "live" | "snapshot" | "demo";
   received_ms: number | null;
   perf: Performance;
 };
