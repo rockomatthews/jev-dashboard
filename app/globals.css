@@ -260,3 +260,21 @@ td a:hover { color: #ff9cec; }
 .idea__head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
 .idea__date { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
 .idea .strategy__what { margin-bottom: 4px; }
+
+/* ---------- idea lab slides (Strategy 3+): each idea trades its own $10k paper book ---------- */
+.page--idea .carousel__name { color: #7ff5d6; text-shadow: 0 0 18px rgba(53, 240, 192, 0.45); }
+.page--idea .carousel__dot--on i { background: #35f0c0; box-shadow: 0 0 8px #35f0c0; }
+.page--idea .carousel__btn:hover { border-color: #7ff5d6; box-shadow: 0 0 18px rgba(53, 240, 192, 0.45); }
+.page--idea .hero__equity { text-shadow: 0 0 40px rgba(53, 240, 192, 0.25); }
+.page--idea .brand__mark, .page--idea .brand__slash { color: #7ff5d6; text-shadow: 0 0 12px #35f0c0; }
+.scene--idea { background: radial-gradient(800px 400px at 50% 60%, rgba(53, 240, 192, 0.07), transparent 70%); }
+.scene--idea::before { background: linear-gradient(90deg, #050a0c, transparent); }
+.scene--idea::after { background: linear-gradient(270deg, #050a0c, transparent); }
+.swatch--carry-low { background: #1b9bd0; box-shadow: 0 0 8px #1b9bd0; }
+.swatch--carry-high { background: #35f0c0; box-shadow: 0 0 8px #35f0c0; }
+.page--idea .target__bar i { background: #35f0c0; box-shadow: 0 0 10px rgba(53, 240, 192, 0.5); }
+.target--held .coin { color: #ffc94d; }
+.target--held .target__bar i { background: #ffc94d; box-shadow: 0 0 10px rgba(255, 201, 77, 0.55); }
+.scene-label--held { color: #ffe3a1; text-shadow: 0 0 10px rgba(255, 201, 77, 0.8); }
+.scene-label--tilt { font-size: 10px; }
+.study__head { font-size: 13px; color: var(--ink-2); margin: 10px 0 6px; }

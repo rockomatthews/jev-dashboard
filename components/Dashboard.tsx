@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { demoSniperPerf } from "@/lib/demo-sniper";
 import { ago, arrow, num, pct, polarity, price, signedUsd, usd, when } from "@/lib/format";
-import type { Performance, PerfResponse, RadarItem, SniperInfo } from "@/lib/types";
+import type { IdeaInfo, Performance, PerfResponse, RadarItem, SniperInfo } from "@/lib/types";
 
 const Scene = dynamic(() => import("./Scene"), {
   ssr: false,
@@ -16,15 +16,33 @@ const SniperScene = dynamic(() => import("./SniperScene"), {
   loading: () => <div className="scene-loading">Spinning up the radar…</div>,
 });
 
+const IdeaScene = dynamic(() => import("./IdeaScene"), {
+  ssr: false,
+  loading: () => <div className="scene-loading">Raising the landscape…</div>,
+});
+
 const POLL_MS = 30_000;
 const STALE_AFTER_MS = 5 * 60_000;
 
-type SlideKey = "trend" | "sniper";
+type SlideKey = string; // "trend" | "sniper" | "idea:<slug>"
+type Slide = { key: SlideKey; n: number; name: string; blurb: string };
 
-const SLIDES: { key: SlideKey; n: number; name: string; blurb: string }[] = [
+const BASE_SLIDES: Slide[] = [
   { key: "trend", n: 1, name: "Trend ensemble", blurb: "Hyperliquid perps · daily trend · long only" },
   { key: "sniper", n: 2, name: "Memecoin sniper", blurb: "Solana DEX pairs · scans every minute · aggressive" },
 ];
+
+/** Strategy 1 and 2, then one slide per idea-lab book (each idea trades its own $10k on paper). */
+function buildSlides(perf: Performance): Slide[] {
+  const ideas = Object.entries(perf.strategies ?? {})
+    .filter(([k, v]) => k.startsWith("idea:") && v && (v as Performance).idea)
+    .map(([k, v]) => {
+      const idea = (v as Performance).idea as IdeaInfo;
+      return { key: k, n: idea.n, name: idea.name, blurb: idea.blurb ?? idea.venue ?? "idea lab · paper" };
+    })
+    .sort((a, b) => a.n - b.n);
+  return [...BASE_SLIDES, ...ideas];
+}
 
 function Pol({ v, children }: { v: number; children: React.ReactNode }) {
   return <span className={`pol pol--${polarity(v)}`}>{children}</span>;
@@ -56,21 +74,21 @@ function compactUsd(v: number): string {
 // =============================================================================================
 // Carousel
 // =============================================================================================
-function Carousel({ slide, onPrev, onNext, equities }: {
-  slide: number; onPrev: () => void; onNext: () => void; equities: (number | null)[];
+function Carousel({ slides, slide, onPrev, onNext, equities }: {
+  slides: Slide[]; slide: number; onPrev: () => void; onNext: () => void; equities: (number | null)[];
 }) {
-  const s = SLIDES[slide];
+  const s = slides[slide];
   return (
     <nav className="carousel" aria-label="Strategies">
       <button type="button" className="carousel__btn" onClick={onPrev} aria-label="Previous strategy">
         <span aria-hidden>◀</span>
       </button>
       <div className="carousel__body" aria-live="polite">
-        <div className="carousel__kicker">STRATEGY {s.n} / {SLIDES.length}</div>
+        <div className="carousel__kicker">STRATEGY {s.n} / {slides.length}{s.key.startsWith("idea:") ? " · IDEA LAB · OWN $10K PAPER BOOK" : ""}</div>
         <div className="carousel__name">{s.name}</div>
         <div className="carousel__blurb">{s.blurb}</div>
         <div className="carousel__dots">
-          {SLIDES.map((x, i) => (
+          {slides.map((x, i) => (
             <span key={x.key} className={`carousel__dot ${i === slide ? "carousel__dot--on" : ""}`}>
               <i aria-hidden />
               S{x.n} {equities[i] === null ? "—" : usd(equities[i] as number, false)}
@@ -337,6 +355,69 @@ function SniperPanels({ p, sn, demo, now }: { p: Performance; sn: SniperInfo; de
 }
 
 // =============================================================================================
+// Idea-lab panels: the idea, its research, today's scores and live pairs
+// =============================================================================================
+function IdeaPanels({ p, idea }: { p: Performance; idea: IdeaInfo }) {
+  const bt = idea.backtest;
+  const scores = Object.entries(idea.state?.scores_apr_pct ?? {});
+  const held = new Set(idea.state?.held ?? []);
+  const maxScore = Math.max(20, ...scores.map(([, v]) => Math.abs(v)));
+  return (
+    <>
+      <section className="panel">
+        <h2>Strategy {idea.n} <span className="panel__hint">idea lab · added {idea.date} · own {usd(p.start_balance, false)} paper book</span></h2>
+        <p className="strategy__what">{idea.rule}</p>
+        <p className="empty">
+          Research: {idea.source_url ? <a href={idea.source_url} target="_blank" rel="noreferrer">{idea.source}</a> : idea.source}
+          {idea.last_rebalance_day ? ` · last rebalance ${idea.last_rebalance_day}` : ""}
+          {idea.kill_reason ? ` · KILLED: ${idea.kill_reason}` : ""}
+          {idea.last_error ? ` · last error: ${idea.last_error}` : ""}
+        </p>
+        {bt && (
+          <div className="study">
+            <div className="study__head">
+              <b>Backtest</b> · {bt.period ?? ""} · after fees, spreads and real funding
+            </div>
+            <table>
+              <thead><tr><th>Test</th><th className="r">Sharpe</th><th className="r">95% CI</th><th className="r">Return / yr</th><th className="r">Max DD</th></tr></thead>
+              <tbody>
+                <tr><td>Fixed rule (all data out of sample)</td><td className="r">{num(bt.sharpe ?? null, 1)}</td>
+                  <td className="r muted">{bt.ci95 ? `${num(bt.ci95[0], 1)} … ${num(bt.ci95[1], 1)}` : "—"}</td>
+                  <td className="r">{bt.ret_yr_pct === undefined ? "—" : `${num(bt.ret_yr_pct, 1)}%`}</td>
+                  <td className="r">{bt.max_dd_pct === undefined ? "—" : `${num(bt.max_dd_pct, 2)}%`}</td></tr>
+                {bt.walk_forward_sharpe !== undefined && (
+                  <tr><td>Walk-forward (tuned on past, traded blind)</td><td className="r">{num(bt.walk_forward_sharpe, 1)}</td>
+                    <td className="r muted">—</td><td className="r">{bt.walk_forward_ret_yr_pct === undefined ? "—" : `${num(bt.walk_forward_ret_yr_pct, 1)}%`}</td><td className="r muted">—</td></tr>
+                )}
+              </tbody>
+            </table>
+            <p className="empty">
+              {bt.placebo_p !== undefined ? `Beats random coin picks (p = ${bt.placebo_p}). ` : ""}
+              {bt.by_year_ret_pct ? `By year: ${Object.entries(bt.by_year_ret_pct).map(([y, v]) => `${y} ${v}%`).join(" · ")}. ` : ""}
+              {bt.caveat ?? ""}
+            </p>
+          </div>
+        )}
+      </section>
+      {scores.length > 0 && (
+        <section className="panel">
+          <h2>Today&apos;s funding scores <span className="panel__hint">7-day average funding paid to shorts, % a year · ◆ = held</span></h2>
+          <div className="targets">
+            {scores.map(([coin, v]) => (
+              <div key={coin} className={`target ${held.has(coin) ? "target--held" : ""}`}>
+                <span className="coin">{held.has(coin) ? "◆ " : ""}{coin}</span>
+                <div className="target__bar"><i style={{ width: `${Math.min(100, (Math.max(0, v) / maxScore) * 100)}%` }} /></div>
+                <span className="target__num">{num(v, 1)}% / yr</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </>
+  );
+}
+
+// =============================================================================================
 // Page
 // =============================================================================================
 export default function Dashboard({ initial }: { initial: PerfResponse }) {
@@ -346,7 +427,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const [dir, setDir] = useState<"left" | "right">("right");
   // Both 3D scenes stay mounted once visited (unmounting a canvas with HTML overlays mid-render
   // breaks React's DOM bookkeeping); the hidden one stops rendering frames.
-  const [visited, setVisited] = useState<Record<SlideKey, boolean>>({ trend: true, sniper: false });
+  const [visited, setVisited] = useState<Record<SlideKey, boolean>>({ trend: true });
 
   useEffect(() => {
     let alive = true;
@@ -374,13 +455,19 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
     [sniperReal, data.perf.updated_ms],
   );
 
-  const isSniper = SLIDES[slide].key === "sniper";
-  const p: Performance = isSniper ? sniperPerf : data.perf;
+  const SLIDES = useMemo(() => buildSlides(data.perf), [data.perf]);
+  const slideIdx = Math.min(slide, SLIDES.length - 1);
+  const slideKey = SLIDES[slideIdx].key;
+  const isSniper = slideKey === "sniper";
+  const ideaPerf = slideKey.startsWith("idea:") ? data.perf.strategies?.[slideKey as `idea:${string}`] : undefined;
+  const idea = ideaPerf?.idea;
+  const isIdea = !!(ideaPerf && idea);
+  const p: Performance = isSniper ? sniperPerf : isIdea ? (ideaPerf as Performance) : data.perf;
   const sn = isSniper ? p.sniper : undefined;
   const t = p.trades;
 
   const go = (step: number) => {
-    const next = (slide + step + SLIDES.length) % SLIDES.length;
+    const next = (slideIdx + step + SLIDES.length) % SLIDES.length;
     setDir(step > 0 ? "right" : "left");
     setVisited((v) => ({ ...v, [SLIDES[next].key]: true }));
     setSlide(next);
@@ -403,10 +490,12 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const since = p.curve.length ? p.curve[0][0] : p.updated_ms;
   const tickerItems: [string, string][] = isSniper
     ? (sn?.radar ?? []).filter((r) => r.status !== "rejected").slice(0, 24).map((r) => [`$${r.symbol}`, `${pct(r.chg5 / 100, 1, true)} · ${r.score.toFixed(2)}`])
-    : Object.entries(p.status.prices ?? {}).map(([c, px]) => [c, price(px)]);
+    : isIdea
+      ? Object.entries(idea?.state?.scores_apr_pct ?? {}).map(([c, v]) => [c, `${num(v, 1)}% / yr funding`])
+      : Object.entries(p.status.prices ?? {}).map(([c, px]) => [c, price(px)]);
 
   return (
-    <main className={`page page--${SLIDES[slide].key}`}>
+    <main className={`page page--${isIdea ? "idea" : slideKey}`}>
       <header className="topbar">
         <div className="brand">
           <span className="brand__mark" aria-hidden>◆</span>
@@ -414,6 +503,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           <span className="brand__sub">
             {isSniper
               ? "paper trading · Solana DEX memecoins · DexScreener radar"
+              : isIdea ? `paper trading · idea lab · ${idea?.venue ?? "hyperliquid"}`
               : `paper trading · Hyperliquid perps · decisions by ${p.status.decider ?? (p.status.jev === "jev" ? "Jev" : "mock Jev")}`}
           </span>
         </div>
@@ -427,10 +517,12 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         </div>
       </header>
 
-      <Carousel slide={slide} onPrev={() => go(-1)} onNext={() => go(1)}
-        equities={[data.perf.equity, sniperDemo ? null : sniperPerf.equity]} />
+      <Carousel slides={SLIDES} slide={slideIdx} onPrev={() => go(-1)} onNext={() => go(1)}
+        equities={SLIDES.map((s) => s.key === "trend" ? data.perf.equity
+          : s.key === "sniper" ? (sniperDemo ? null : sniperPerf.equity)
+            : data.perf.strategies?.[s.key as `idea:${string}`]?.equity ?? null)} />
 
-      <div key={SLIDES[slide].key} className={`slide slide--from-${dir}`}>
+      <div key={slideKey} className={`slide slide--from-${dir}`}>
         {tickerItems.length > 0 && (
           <div className="ticker" aria-label={isSniper ? "Radar" : "Latest prices"}>
             <div className="ticker__track">
@@ -443,7 +535,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
 
         <section className="hero">
           <div>
-            <div className="hero__label">{isSniper ? "Sniper paper equity" : "Paper equity"}</div>
+            <div className="hero__label">{isSniper ? "Sniper paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
             <div className="hero__equity">{usd(p.equity)}</div>
             <div className="hero__pnl">
               <Pol v={p.pnl}>{arrow(p.pnl)} {signedUsd(p.pnl)} ({pct(p.pnl_pct, 2, true)})</Pol>
@@ -458,6 +550,14 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               <span><i className="swatch swatch--reject" /> rejected</span>
               <span className="legend__note">x: pair age · y: 5-minute move · depth: buy pressure · size: liquidity · lines link nearest neighbours · drag to orbit, hover a token</span>
             </div>
+          ) : isIdea ? (
+            <div className="legend" aria-label="Legend">
+              <span><i className="swatch swatch--carry-low" /> funding below baseline</span>
+              <span><i className="swatch swatch--carry-high" /> rich funding</span>
+              <span><i className="swatch swatch--held" /> weeks the strategy held it</span>
+              <span><i className="swatch swatch--loss" /> negative funding</span>
+              <span className="legend__note">x: coin · depth: week (newest in front, beacons = today) · height: {p.scene?.y_label ?? "value"} · planes: 11.6% baseline and 15% entry line · drag to orbit, hover a bar</span>
+            </div>
           ) : (
             <div className="legend" aria-label="Legend">
               <span><i className="swatch swatch--gain" /> ▲ gain</span>
@@ -469,19 +569,26 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
 
       </div>
 
-      <section className={`scene ${isSniper ? "scene--sniper" : ""}`}
-        aria-label={isSniper ? "3D cluster map of Solana pairs the sniper is tracking" : "3D view of the equity curve and per-coin P&L"}>
-        <div className={`scene__layer ${!isSniper ? "scene__layer--on" : ""}`} aria-hidden={isSniper}>
-          <Scene perf={data.perf} active={!isSniper} />
+      <section className={`scene ${isSniper ? "scene--sniper" : isIdea ? "scene--idea" : ""}`}
+        aria-label={isSniper ? "3D cluster map of Solana pairs the sniper is tracking"
+          : isIdea ? `3D view for strategy ${idea?.n}: ${p.scene?.title ?? idea?.name}`
+            : "3D view of the equity curve and per-coin P&L"}>
+        <div className={`scene__layer ${slideKey === "trend" ? "scene__layer--on" : ""}`} aria-hidden={slideKey !== "trend"}>
+          <Scene perf={data.perf} active={slideKey === "trend"} />
         </div>
         {visited.sniper && sniperPerf.sniper && (
           <div className={`scene__layer ${isSniper ? "scene__layer--on" : ""}`} aria-hidden={!isSniper}>
             <SniperScene sniper={sniperPerf.sniper} demo={sniperDemo} active={isSniper} />
           </div>
         )}
+        {SLIDES.filter((s) => s.key.startsWith("idea:") && visited[s.key]).map((s) => (
+          <div key={s.key} className={`scene__layer ${slideKey === s.key ? "scene__layer--on" : ""}`} aria-hidden={slideKey !== s.key}>
+            <IdeaScene scene={data.perf.strategies?.[s.key as `idea:${string}`]?.scene} active={slideKey === s.key} />
+          </div>
+        ))}
       </section>
 
-      <div key={`${SLIDES[slide].key}-body`} className={`slide slide--from-${dir}`}>
+      <div key={`${slideKey}-body`} className={`slide slide--from-${dir}`}>
         <section className="stats">
           <Stat label="Total P&L" value={signedUsd(p.pnl)} v={p.pnl} sub={pct(p.pnl_pct, 2, true)} />
           <Stat label="Realized" value={signedUsd(p.realized)} v={p.realized} sub="price P&L on closed size" />
@@ -500,7 +607,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             sub={`worst ${t.worst === null ? "—" : signedUsd(t.worst)}`} v={t.best ?? undefined} />
         </section>
 
-        {isSniper && sn ? <SniperPanels p={p} sn={sn} demo={sniperDemo} now={now} /> : <TrendPanels p={p} />}
+        {isSniper && sn ? <SniperPanels p={p} sn={sn} demo={sniperDemo} now={now} />
+          : isIdea && idea ? <IdeaPanels p={p} idea={idea} /> : <TrendPanels p={p} />}
 
         {data.perf.ideas && data.perf.ideas.length > 0 && (
           <section className="panel">
@@ -642,7 +750,9 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         </div>
 
         <footer className="foot">
-          {isSniper
+          {isIdea
+            ? `Paper trading only — idea-lab book with its own ${usd(p.start_balance, false)}. Both legs are simulated Hyperliquid market orders (perp 4.5 bp, spot 7 bp taker, plus spread and latency); funding is settled hourly at the exchange's rate. Not investment advice.`
+            : isSniper
             ? "Paper trading only — simulated swaps priced from real DexScreener pool data with AMM price impact, DEX and priority fees and latency slippage. Most new memecoins go to zero; this measures whether filters and exits beat that. Not investment advice."
             : `Paper trading only — simulated fills against real Hyperliquid order books, including fees, slippage and funding. Not investment advice. Step ${p.status.step ?? "—"} · ${p.status.coins?.join(" · ") ?? ""}`}
         </footer>

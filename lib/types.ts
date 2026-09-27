@@ -102,6 +102,46 @@ export type SniperInfo = {
   };
 };
 
+export type IdeaScene = {
+  kind: "terrain";
+  title?: string;
+  x_label?: string;
+  z_label?: string;
+  y_label?: string;
+  x: string[];
+  z: string[];
+  y: (number | null)[][];
+  glow?: number[][];
+  glow_label?: string;
+  ref_plane?: number | null;
+  ref_label?: string;
+  enter_line?: number | null;
+  live?: Record<string, { apr: number | null; held: boolean }>;
+};
+
+export type IdeaInfo = {
+  slug: string;
+  n: number;
+  date: string;
+  name: string;
+  blurb?: string;
+  venue?: string;
+  source: string;
+  source_url?: string;
+  rule: string;
+  status?: string;
+  max_drawdown?: number;
+  backtest?: Record<string, unknown> & {
+    period?: string; sharpe?: number; ci95?: [number, number]; ret_yr_pct?: number; max_dd_pct?: number;
+    walk_forward_sharpe?: number; walk_forward_ret_yr_pct?: number; placebo_p?: number;
+    by_year_ret_pct?: Record<string, number>; stress_basis_30bp_sharpe?: number; caveat?: string;
+  };
+  kill_reason?: string;
+  last_error?: string;
+  last_rebalance_day?: string;
+  state?: { scores_apr_pct?: Record<string, number>; held?: string[] } & Record<string, unknown>;
+};
+
 export type Performance = {
   schema: 1;
   updated_ms: number;
@@ -155,7 +195,9 @@ export type Performance = {
   };
   sniper?: SniperInfo;
   ideas?: { date: string; name: string; source: string; rule: string; status: string; verdict: string; sharpe?: number | null }[];
-  strategies?: { sniper?: Performance };
+  strategies?: { sniper?: Performance } & { [key: `idea:${string}`]: Performance | undefined };
+  idea?: IdeaInfo;
+  scene?: IdeaScene | null;
   status: {
     step?: number;
     decider?: string;
