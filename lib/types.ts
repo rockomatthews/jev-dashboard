@@ -98,7 +98,7 @@ export type SniperInfo = {
     position_frac: number; max_open: number;
     stop_loss: number; take_profit_1: number; trail_after: number; trail_pct: number; max_hold_min: number;
     rug_liquidity_drop: number; dex_fee: number; priority_fee_usd: number; latency_slip: number;
-    max_drawdown: number; max_daily_loss: number; reentry_block_h: number;
+    max_drawdown: number; max_daily_loss: number; reentry_block_h: number; max_liq_frac?: number; manage_interval_s?: number; note?: string;
   };
 };
 

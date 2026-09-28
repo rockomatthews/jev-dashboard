@@ -29,7 +29,7 @@ type Slide = { key: SlideKey; n: number; name: string; blurb: string };
 
 const BASE_SLIDES: Slide[] = [
   { key: "trend", n: 1, name: "Trend ensemble", blurb: "Hyperliquid perps · daily trend · long only" },
-  { key: "sniper", n: 2, name: "Memecoin sniper", blurb: "Solana DEX pairs · scans every minute · aggressive" },
+  { key: "sniper", n: 2, name: "Memecoin sniper v2", blurb: "Solana DEX pairs · deep pools only · 10-second stops · v1 archived (−60%)" },
 ];
 
 /** Strategy 1 and 2, then one slide per idea-lab book (each idea trades its own $10k on paper). */
@@ -262,7 +262,7 @@ function SniperPanels({ p, sn, demo, now }: { p: Performance; sn: SniperInfo; de
           how new it is (10%) and pool depth (5%). Hard filters throw out anything younger than {c.min_age_min} minutes or older
           than {fmtAge(c.max_age_min)}, pools under {compactUsd(c.min_liquidity)} or over {compactUsd(c.max_liquidity)}, FDV over{" "}
           {compactUsd(c.max_fdv)}, under {compactUsd(c.min_m5_volume)} of 5-minute volume, or already up {c.max_m5_change}% in 5 minutes.
-          It buys the best pair scoring {num(c.min_score, 2)} or more with {pct(c.position_frac, 0)} of equity, up to {c.max_open} at once.
+          It buys the best pair scoring {num(c.min_score, 2)} or more with {pct(c.position_frac, 0)} of equity{c.max_liq_frac ? ` (never more than ${pct(c.max_liq_frac, 1)} of the pool, so the trade can't move the price much)` : ""}, up to {c.max_open} at once{c.manage_interval_s ? `; open positions are re-checked every ${c.manage_interval_s} seconds` : ""}.
         </p>
         <div className="rules">
           <span className="rule rule--loss">stop {pct(c.stop_loss, 0, true)}</span>
