@@ -472,11 +472,12 @@ function KalshiPanels({ k, now }: { k: KalshiInfo; now: number }) {
         <h2>Strategy 7 <span className="panel__hint">Kalshi · paper · own $10,000 · positions opened and closed within seconds</span></h2>
         <p className="strategy__what">
           &quot;Buy, then sell right away&quot; pays the whole bid/ask spread plus two taker fees on every round trip, so the naive version
-          loses by construction. This book does the only in-and-out version that can win: it rests a YES bid one cent above the best
-          bid on the most active Kalshi markets with a {Math.round((c.min_spread ?? 0.03) * 100)}¢+ spread, and the moment the public trade tape
-          says it filled, it offers the contracts back one cent under the best ask. If nobody takes the offer within {c.max_hold_s ?? 120}s,
-          or the bid drops {c.stop_cents ?? 3}¢ under the entry, it sells into the bid as a taker. About {usd(c.order_usd ?? 400, false)} per quote,
-          up to {usd(c.max_open_usd ?? 4000, false)} working at once.
+          loses by construction. This book does the only in-and-out version that can win: it buys at the bid and sells at the
+          ask as a resting order on the {c.max_markets ?? 20} busiest Kalshi markets. On tight books it joins the back of the best-bid queue
+          (it only fills after every contract resting ahead of it has traded); on books {Math.round((c.improve_spread ?? 0.03) * 100)}¢+ wide it steps
+          one cent inside. The moment the public trade tape says it filled, it offers the contracts back one cent higher (or in the
+          best-ask queue). If nobody takes the offer within {c.max_hold_s ?? 120}s, or the bid drops {c.stop_cents ?? 3}¢ under the entry,
+          it sells into the bid as a taker. About {usd(c.order_usd ?? 400, false)} per quote, up to {usd(c.max_open_usd ?? 4000, false)} working at once.
         </p>
         <div className="vs">
           <div className="vs__card vs__card--bad">
