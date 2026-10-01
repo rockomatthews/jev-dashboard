@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { demoSniperPerf } from "@/lib/demo-sniper";
 import { ago, arrow, num, pct, polarity, price, signedUsd, usd, when } from "@/lib/format";
-import type { IdeaInfo, Performance, PerfResponse, RadarItem, SniperInfo } from "@/lib/types";
+import type { IdeaInfo, KalshiInfo, Performance, PerfResponse, RadarItem, SniperInfo } from "@/lib/types";
 
 const Scene = dynamic(() => import("./Scene"), {
   ssr: false,
@@ -14,6 +14,11 @@ const Scene = dynamic(() => import("./Scene"), {
 const SniperScene = dynamic(() => import("./SniperScene"), {
   ssr: false,
   loading: () => <div className="scene-loading">Spinning up the radar…</div>,
+});
+
+const KalshiScene = dynamic(() => import("./KalshiScene"), {
+  ssr: false,
+  loading: () => <div className="scene-loading">Raising the order-book towers…</div>,
 });
 
 const IdeaScene = dynamic(() => import("./IdeaScene"), {
@@ -41,7 +46,11 @@ function buildSlides(perf: Performance): Slide[] {
       return { key: k, n: idea.n, name: idea.name, blurb: idea.blurb ?? idea.venue ?? "idea lab · paper" };
     })
     .sort((a, b) => a.n - b.n);
-  return [...BASE_SLIDES, ...ideas];
+  const kalshi: Slide[] = perf.strategies?.kalshi?.kalshi
+    ? [{ key: "kalshi", n: 7, name: "Kalshi in-and-out scalper",
+        blurb: "prediction markets · rest inside the spread, flip within seconds · naive buy-then-sell tracked as a control" }]
+    : [];
+  return [...BASE_SLIDES, ...ideas, ...kalshi];
 }
 
 function Pol({ v, children }: { v: number; children: React.ReactNode }) {
@@ -450,6 +459,113 @@ function IdeaPanels({ p, idea }: { p: Performance; idea: IdeaInfo }) {
 }
 
 // =============================================================================================
+// Strategy 7 panels (Kalshi scalper)
+// =============================================================================================
+function KalshiPanels({ k, now }: { k: KalshiInfo; now: number }) {
+  const s = k.summary;
+  const c = k.config;
+  const ctl = k.control;
+  return (
+    <>
+      <section className="panel">
+        <h2>Strategy 7 <span className="panel__hint">Kalshi · paper · own $10,000 · positions opened and closed within seconds</span></h2>
+        <p className="strategy__what">
+          &quot;Buy, then sell right away&quot; pays the whole bid/ask spread plus two taker fees on every round trip, so the naive version
+          loses by construction. This book does the only in-and-out version that can win: it rests a YES bid one cent above the best
+          bid on the most active Kalshi markets with a {Math.round((c.min_spread ?? 0.03) * 100)}¢+ spread, and the moment the public trade tape
+          says it filled, it offers the contracts back one cent under the best ask. If nobody takes the offer within {c.max_hold_s ?? 120}s,
+          or the bid drops {c.stop_cents ?? 3}¢ under the entry, it sells into the bid as a taker. About {usd(c.order_usd ?? 400, false)} per quote,
+          up to {usd(c.max_open_usd ?? 4000, false)} working at once.
+        </p>
+        <div className="vs">
+          <div className="vs__card vs__card--bad">
+            <div className="vs__label">Naive in-and-out (control, never traded)</div>
+            <div className="vs__num pol pol--loss">{ctl.pnl_per_contract_c === null ? "—" : `${ctl.pnl_per_contract_c.toFixed(2)}¢`}</div>
+            <div className="vs__sub">per contract · buy at the ask, sell at the bid, two taker fees · measured {num(ctl.n, 0)} times</div>
+          </div>
+          <div className="vs__card">
+            <div className="vs__label">Spread harvest (what this book trades)</div>
+            <div className={`vs__num pol pol--${s.pnl_per_contract_c === null ? "flat" : s.pnl_per_contract_c > 0 ? "gain" : "loss"}`}>
+              {s.pnl_per_contract_c === null ? "—" : `${s.pnl_per_contract_c > 0 ? "+" : ""}${s.pnl_per_contract_c.toFixed(2)}¢`}
+            </div>
+            <div className="vs__sub">per contract after fees · {s.round_trips} round trips · win rate {s.win_rate === null ? "—" : pct(s.win_rate, 0)}
+              {" "}· avg hold {s.avg_hold_s === null ? "—" : `${Math.round(s.avg_hold_s)}s`} · {s.maker_exit_share === null ? "—" : pct(s.maker_exit_share, 0)} exited as maker</div>
+          </div>
+        </div>
+        <div className="scanmeta">
+          <span><b>{k.markets.length}</b> markets worked</span>
+          <span><b>{num(s.quotes, 0)}</b> bids quoted</span>
+          <span><b>{num(s.entry_fills, 0)}</b> filled</span>
+          <span><b>{num(s.cancels, 0)}</b> cancelled / re-pegged</span>
+          <span><b>{num(s.maker_exits, 0)}</b> maker exits · <b>{num(s.taker_exits, 0)}</b> taker bail-outs</span>
+          <span>last tick <b>{k.last_step_ms ? ago(k.last_step_ms, now) : "—"}</b></span>
+          {k.kill_reason && <span className="pol pol--loss">⛔ {k.kill_reason}</span>}
+          {k.last_error && <span className="pol pol--loss">⚠ {k.last_error}</span>}
+        </div>
+        <p className="empty">
+          Paper fills are earned from the real tape: a bid fills only when a later trade shows a seller at or through our price
+          (strictly through if someone else already rests there), never before a {c.latency_s ?? 1}s latency, and never for more contracts
+          than actually traded. Fees follow Kalshi&apos;s schedule (taker 0.07·C·P·(1−P), maker 0.0175·C·P·(1−P), rounded up to the cent),
+          with the maker fee charged everywhere even though most series charge makers nothing. Why makers: Kalshi&apos;s own data show takers
+          losing ~32% on average vs ~10% for makers (<a href={k.source_url} target="_blank" rel="noreferrer">{k.source}</a>).
+        </p>
+      </section>
+
+      <section className="panel">
+        <h2>Markets on the board <span className="panel__hint">the most active open markets with a wide spread · refreshed every 10 minutes</span></h2>
+        {k.markets.length === 0 ? (
+          <p className="empty">No open market has a 3¢+ spread with enough volume right now. The scalper waits.</p>
+        ) : (
+          <table>
+            <thead><tr><th>Market</th><th className="r">Bid</th><th className="r">Ask</th><th className="r">Spread</th><th className="r">24h vol</th><th>Our order</th><th className="r">Held</th><th className="r">Closes</th></tr></thead>
+            <tbody>
+              {k.markets.map((m) => (
+                <tr key={m.ticker} className={m.held > 0 ? "row--held" : m.stage === "bidding" ? "row--live" : ""}>
+                  <td className="why" title={`${m.ticker} · ${m.title}`}>{m.title}</td>
+                  <td className="r">{Math.round((m.bids[0]?.[0] ?? m.bid) * 100)}¢</td>
+                  <td className="r">{Math.round((m.asks[0]?.[0] ?? m.ask) * 100)}¢</td>
+                  <td className="r">{Math.round(((m.asks[0]?.[0] ?? m.ask) - (m.bids[0]?.[0] ?? m.bid)) * 100)}¢</td>
+                  <td className="r muted">{num(m.vol24, 0)}</td>
+                  <td>{m.our_bid !== null ? <span className="pill pill--watch">BID {Math.round(m.our_bid * 100)}¢</span>
+                    : m.our_ask !== null ? <span className="pill pill--held">OFFER {Math.round(m.our_ask * 100)}¢</span> : "—"}</td>
+                  <td className="r">{m.held > 0 ? `${num(m.held, 0)} @ ${Math.round((m.entry ?? 0) * 100)}¢` : "—"}</td>
+                  <td className="r muted">{m.hours_to_close}h</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section className="panel">
+        <h2>Recent round trips <span className="panel__hint">in → out, after fees</span></h2>
+        {k.round_trips.length === 0 ? (
+          <p className="empty">No completed round trips yet.</p>
+        ) : (
+          <table>
+            <thead><tr><th>Closed</th><th>Market</th><th className="r">Contracts</th><th className="r">In</th><th className="r">Out</th><th className="r">Held</th><th>Exit</th><th className="r">P&amp;L</th></tr></thead>
+            <tbody>
+              {[...k.round_trips].reverse().slice(0, 25).map((r, i) => (
+                <tr key={`${r.ticker}-${r.t_close}-${i}`}>
+                  <td className="muted">{when(r.t_close * 1000)}</td>
+                  <td className="why" title={r.ticker}>{r.title || r.ticker}</td>
+                  <td className="r">{num(r.qty, 0)}</td>
+                  <td className="r">{Math.round(r.entry * 100)}¢</td>
+                  <td className="r">{(r.exit * 100).toFixed(1)}¢</td>
+                  <td className="r muted">{Math.round(r.hold_s)}s</td>
+                  <td>{r.how === "maker" ? <span className="pill pill--watch">MAKER</span> : <span className="pill pill--rejected">TAKER BAIL</span>}</td>
+                  <td className="r"><b><Pol v={r.pnl}>{signedUsd(r.pnl)}</Pol></b></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+    </>
+  );
+}
+
+// =============================================================================================
 // Page
 // =============================================================================================
 export default function Dashboard({ initial }: { initial: PerfResponse }) {
@@ -491,10 +607,13 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const slideIdx = Math.min(slide, SLIDES.length - 1);
   const slideKey = SLIDES[slideIdx].key;
   const isSniper = slideKey === "sniper";
+  const isKalshi = slideKey === "kalshi";
+  const kalshiPerf = data.perf.strategies?.kalshi;
   const ideaPerf = slideKey.startsWith("idea:") ? data.perf.strategies?.[slideKey as `idea:${string}`] : undefined;
   const idea = ideaPerf?.idea;
   const isIdea = !!(ideaPerf && idea);
-  const p: Performance = isSniper ? sniperPerf : isIdea ? (ideaPerf as Performance) : data.perf;
+  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isIdea ? (ideaPerf as Performance) : data.perf;
+  const kal = isKalshi ? p.kalshi : undefined;
   const sn = isSniper ? p.sniper : undefined;
   const t = p.trades;
 
@@ -522,6 +641,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const since = p.curve.length ? p.curve[0][0] : p.updated_ms;
   const tickerItems: [string, string][] = isSniper
     ? (sn?.radar ?? []).filter((r) => r.status !== "rejected").slice(0, 24).map((r) => [`$${r.symbol}`, `${pct(r.chg5 / 100, 1, true)} · ${r.score.toFixed(2)}`])
+    : isKalshi
+      ? (kal?.markets ?? []).map((m) => [m.ticker, `${Math.round((m.bids[0]?.[0] ?? m.bid) * 100)}¢ / ${Math.round((m.asks[0]?.[0] ?? m.ask) * 100)}¢`])
     : isIdea
       ? Object.entries(idea?.state?.scores_apr_pct ?? {}).map(([c, v]) => [c, `${num(v, 1)}% / yr funding`])
       : Object.entries(p.status.prices ?? {}).map(([c, px]) => [c, price(px)]);
@@ -535,6 +656,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           <span className="brand__sub">
             {isSniper
               ? "paper trading · Solana DEX memecoins · DexScreener radar"
+              : isKalshi ? "paper trading · Kalshi prediction markets · public order books + trade tape"
               : isIdea ? `paper trading · idea lab · ${idea?.venue ?? "hyperliquid"}`
               : `paper trading · Hyperliquid perps · decisions by ${p.status.decider ?? (p.status.jev === "jev" ? "Jev" : "mock Jev")}`}
           </span>
@@ -552,6 +674,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
       <Carousel slides={SLIDES} slide={slideIdx} onPrev={() => go(-1)} onNext={() => go(1)}
         equities={SLIDES.map((s) => s.key === "trend" ? data.perf.equity
           : s.key === "sniper" ? (sniperDemo ? null : sniperPerf.equity)
+          : s.key === "kalshi" ? (kalshiPerf?.equity ?? null)
             : data.perf.strategies?.[s.key as `idea:${string}`]?.equity ?? null)} />
 
       <div key={slideKey} className={`slide slide--from-${dir}`}>
@@ -567,7 +690,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
 
         <section className="hero">
           <div>
-            <div className="hero__label">{isSniper ? "Sniper paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
+            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
             <div className="hero__equity">{usd(p.equity)}</div>
             <div className="hero__pnl">
               <Pol v={p.pnl}>{arrow(p.pnl)} {signedUsd(p.pnl)} ({pct(p.pnl_pct, 2, true)})</Pol>
@@ -581,6 +704,14 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               <span><i className="swatch swatch--zone" /> snipe zone</span>
               <span><i className="swatch swatch--reject" /> rejected</span>
               <span className="legend__note">x: pair age · y: 5-minute move · depth: buy pressure · size: liquidity · lines link nearest neighbours · drag to orbit, hover a token</span>
+            </div>
+          ) : isKalshi ? (
+            <div className="legend" aria-label="Legend">
+              <span><i className="swatch swatch--gain" /> YES bids</span>
+              <span><i className="swatch swatch--loss" /> YES asks</span>
+              <span><i className="swatch swatch--zone" /> the spread we harvest</span>
+              <span><i className="swatch swatch--held" /> our offer / position</span>
+              <span className="legend__note">one tower per market (0¢ floor → 100¢ top) · cyan ring: our resting bid · loops: finished round trips from entry to exit, green = profit, dashed = taker bail-out · drag to orbit, hover a tower</span>
             </div>
           ) : isIdea && p.scene?.kind === "channels" ? (
             <div className="legend" aria-label="Legend">
@@ -609,8 +740,9 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
 
       </div>
 
-      <section className={`scene ${isSniper ? "scene--sniper" : isIdea ? "scene--idea" : ""}`}
+      <section className={`scene ${isSniper ? "scene--sniper" : isIdea || isKalshi ? "scene--idea" : ""}`}
         aria-label={isSniper ? "3D cluster map of Solana pairs the sniper is tracking"
+          : isKalshi ? "3D order-book towers for the Kalshi markets the scalper works"
           : isIdea ? `3D view for strategy ${idea?.n}: ${p.scene?.title ?? idea?.name}`
             : "3D view of the equity curve and per-coin P&L"}>
         <div className={`scene__layer ${slideKey === "trend" ? "scene__layer--on" : ""}`} aria-hidden={slideKey !== "trend"}>
@@ -619,6 +751,11 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         {visited.sniper && sniperPerf.sniper && (
           <div className={`scene__layer ${isSniper ? "scene__layer--on" : ""}`} aria-hidden={!isSniper}>
             <SniperScene sniper={sniperPerf.sniper} demo={sniperDemo} active={isSniper} />
+          </div>
+        )}
+        {visited.kalshi && kalshiPerf?.kalshi && (
+          <div className={`scene__layer ${isKalshi ? "scene__layer--on" : ""}`} aria-hidden={!isKalshi}>
+            <KalshiScene info={kalshiPerf.kalshi} active={isKalshi} />
           </div>
         )}
         {SLIDES.filter((s) => s.key.startsWith("idea:") && visited[s.key]).map((s) => (
@@ -648,6 +785,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         </section>
 
         {isSniper && sn ? <SniperPanels p={p} sn={sn} demo={sniperDemo} now={now} />
+          : isKalshi && kal ? <KalshiPanels k={kal} now={now} />
           : isIdea && idea ? <IdeaPanels p={p} idea={idea} /> : <TrendPanels p={p} />}
 
         {data.perf.ideas && data.perf.ideas.length > 0 && (
@@ -790,7 +928,9 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         </div>
 
         <footer className="foot">
-          {isIdea
+          {isKalshi
+            ? "Paper trading only — Kalshi orders are simulated against the public order books and trade tape with Kalshi's fee schedule; nothing is sent to Kalshi. Not investment advice."
+            : isIdea
             ? `Paper trading only — idea-lab book with its own ${usd(p.start_balance, false)}. Both legs are simulated Hyperliquid market orders (perp 4.5 bp, spot 7 bp taker, plus spread and latency); funding is settled hourly at the exchange's rate. Not investment advice.`
             : isSniper
             ? "Paper trading only — simulated swaps priced from real DexScreener pool data with AMM price impact, DEX and priority fees and latency slippage. Most new memecoins go to zero; this measures whether filters and exits beat that. Not investment advice."

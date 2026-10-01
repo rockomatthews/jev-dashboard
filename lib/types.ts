@@ -119,6 +119,30 @@ export type TerrainScene = {
   live?: Record<string, { apr: number | null; held: boolean }>;
 };
 
+export type KalshiMarket = {
+  ticker: string; title: string; event?: string | null; bid: number; ask: number; vol24: number; hours_to_close: number;
+  bids: [number, number][]; asks: [number, number][]; stage: "idle" | "bidding" | "holding";
+  our_bid: number | null; our_ask: number | null; held: number; entry: number | null; mid?: number | null;
+};
+
+export type KalshiTrip = {
+  ticker: string; title: string; qty: number; entry: number; exit: number; t_open: number; t_close: number;
+  hold_s: number; how: "maker" | "taker"; pnl: number;
+};
+
+export type KalshiInfo = {
+  markets: KalshiMarket[];
+  round_trips: KalshiTrip[];
+  summary: {
+    round_trips: number; wins: number; win_rate: number | null; contracts: number; pnl: number;
+    pnl_per_contract_c: number | null; avg_hold_s: number | null; maker_exit_share: number | null;
+    quotes: number; entry_fills: number; maker_exits: number; taker_exits: number; cancels: number;
+  };
+  control: { n: number; contracts: number; pnl: number; pnl_per_contract_c: number | null };
+  config: Record<string, number>;
+  kill_reason: string; last_error: string; last_step_ms: number; source: string; source_url: string;
+};
+
 export type ChannelLane = {
   coin: string;
   close: (number | null)[];
@@ -224,8 +248,9 @@ export type Performance = {
     replication?: { universe: string; sharpe: number; ci: [number, number]; p: number | null; mdd: number; buyhold_sharpe: number; buyhold_mdd: number };
   };
   sniper?: SniperInfo;
+  kalshi?: KalshiInfo;
   ideas?: { date: string; name: string; source: string; rule: string; status: string; verdict: string; sharpe?: number | null }[];
-  strategies?: { sniper?: Performance } & { [key: `idea:${string}`]: Performance | undefined };
+  strategies?: { sniper?: Performance; kalshi?: Performance } & { [key: `idea:${string}`]: Performance | undefined };
   idea?: IdeaInfo;
   scene?: IdeaScene | null;
   status: {
