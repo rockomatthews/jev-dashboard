@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { demoSniperPerf } from "@/lib/demo-sniper";
+import BacktestLab, { SLIDE_TO_BACKTEST } from "./BacktestLab";
 import { ago, arrow, num, pct, polarity, price, signedUsd, usd, when } from "@/lib/format";
 import type { IdeaInfo, KalshiInfo, Performance, PerfResponse, RadarItem, SniperInfo } from "@/lib/types";
 
@@ -783,6 +784,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           <Stat label="Best / worst trade" value={`${t.best === null ? "—" : signedUsd(t.best)}`}
             sub={`worst ${t.worst === null ? "—" : signedUsd(t.worst)}`} v={t.best ?? undefined} />
         </section>
+
+        <BacktestLab focus={SLIDE_TO_BACKTEST[slideKey] ?? null} />
 
         {isSniper && sn ? <SniperPanels p={p} sn={sn} demo={sniperDemo} now={now} />
           : isKalshi && kal ? <KalshiPanels k={kal} now={now} />
