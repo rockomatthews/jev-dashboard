@@ -278,3 +278,7 @@ td a:hover { color: #ff9cec; }
 .scene-label--held { color: #ffe3a1; text-shadow: 0 0 10px rgba(255, 201, 77, 0.8); }
 .scene-label--tilt { font-size: 10px; }
 .study__head { font-size: 13px; color: var(--ink-2); margin: 10px 0 6px; }
+.swatch--outer { background: rgba(109, 75, 216, 0.35); border: 1px solid #6d4bd8; }
+.scene-title--rocket { color: #ffd77a; text-shadow: 0 0 10px rgba(255, 201, 77, 0.6); }
+.scene-label--lane { align-items: flex-start; font-size: 11px; }
+.scene-label--hot .scene-label__coin { color: #fff; text-shadow: 0 0 8px #ffc94d; }

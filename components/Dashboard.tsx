@@ -362,6 +362,8 @@ function IdeaPanels({ p, idea }: { p: Performance; idea: IdeaInfo }) {
   const scores = Object.entries(idea.state?.scores_apr_pct ?? {});
   const held = new Set(idea.state?.held ?? []);
   const maxScore = Math.max(20, ...scores.map(([, v]) => Math.abs(v)));
+  const weights = idea.state?.weights ?? {};
+  const signals = Object.entries(idea.state?.signal ?? {}).sort((a, b) => b[1] - a[1] || (weights[b[0]] ?? 0) - (weights[a[0]] ?? 0));
   return (
     <>
       <section className="panel">
@@ -399,6 +401,36 @@ function IdeaPanels({ p, idea }: { p: Performance; idea: IdeaInfo }) {
           </div>
         )}
       </section>
+      {bt?.risk_dial && typeof bt.risk_dial === "object" && (
+        <section className="panel">
+          <h2>Risk dial <span className="panel__hint">same rules, different leverage · live setting marked</span></h2>
+          <table>
+            <thead><tr><th>Volatility target</th><th className="r">Sharpe</th><th className="r">Return / yr</th><th className="r">Max DD</th></tr></thead>
+            <tbody>
+              {Object.entries(bt.risk_dial as Record<string, { sharpe: number; ret_yr_pct: number; max_dd_pct: number }>).map(([k, r]) => (
+                <tr key={k} className={k.includes("live") ? "row--live" : ""}>
+                  <td className="coin">{k}</td><td className="r">{num(r.sharpe, 2)}</td>
+                  <td className="r">{num(r.ret_yr_pct, 1)}%</td><td className="r">{num(r.max_dd_pct, 1)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+      {signals.length > 0 && (
+        <section className="panel">
+          <h2>Breakout board <span className="panel__hint">share of the nine breakout systems that are long · weight = % of equity · book ×{num(idea.state?.scale ?? 0, 2)}, {num(idea.state?.gross ?? 0, 2)}x gross</span></h2>
+          <div className="targets">
+            {signals.map(([coin, v]) => (
+              <div key={coin} className={`target ${v > 0 ? "target--held" : ""}`}>
+                <span className="coin">{coin}</span>
+                <div className="target__bar"><i style={{ width: `${Math.min(100, v * 100)}%` }} /></div>
+                <span className="target__num">{Math.round(v * 9)}/9 long · {num((weights[coin] ?? 0) * 100, 1)}%</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       {scores.length > 0 && (
         <section className="panel">
           <h2>Today&apos;s funding scores <span className="panel__hint">7-day average funding paid to shorts, % a year · ◆ = held</span></h2>
@@ -550,13 +582,21 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               <span><i className="swatch swatch--reject" /> rejected</span>
               <span className="legend__note">x: pair age · y: 5-minute move · depth: buy pressure · size: liquidity · lines link nearest neighbours · drag to orbit, hover a token</span>
             </div>
+          ) : isIdea && p.scene?.kind === "channels" ? (
+            <div className="legend" aria-label="Legend">
+              <span><i className="swatch swatch--held" /> price, long</span>
+              <span><i className="swatch swatch--zone" /> 20-day channel</span>
+              <span><i className="swatch swatch--outer" /> 90-day channel</span>
+              <span><i className="swatch swatch--loss" /> stop-out</span>
+              <span className="legend__note">one lane per coin (strongest in front) · x: last 90 days · gold cones: breakouts (bigger = longer lookback) · right: nine breakout lights 5d→360d and today&apos;s weight · drag to orbit, hover a lane</span>
+            </div>
           ) : isIdea ? (
             <div className="legend" aria-label="Legend">
               <span><i className="swatch swatch--carry-low" /> funding below baseline</span>
               <span><i className="swatch swatch--carry-high" /> rich funding</span>
               <span><i className="swatch swatch--held" /> weeks the strategy held it</span>
               <span><i className="swatch swatch--loss" /> negative funding</span>
-              <span className="legend__note">x: coin · depth: week (newest in front, beacons = today) · height: {p.scene?.y_label ?? "value"} · planes: 11.6% baseline and 15% entry line · drag to orbit, hover a bar</span>
+              <span className="legend__note">x: coin · depth: week (newest in front, beacons = today) · height: {p.scene?.kind === "terrain" ? p.scene.y_label ?? "value" : "value"} · planes: 11.6% baseline and 15% entry line · drag to orbit, hover a bar</span>
             </div>
           ) : (
             <div className="legend" aria-label="Legend">

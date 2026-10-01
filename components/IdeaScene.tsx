@@ -5,7 +5,10 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Bloom, EffectComposer, Vignette } from "@react-three/postprocessing";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import type { IdeaScene as SceneData } from "@/lib/types";
+import dynamic from "next/dynamic";
+import type { IdeaScene as AnyScene, TerrainScene as SceneData } from "@/lib/types";
+
+const BreakoutScene = dynamic(() => import("./BreakoutScene"), { ssr: false });
 
 // Generic 3D view for idea-lab strategies. kind "terrain": a landscape of bars,
 // x = category (coin), z = time (oldest at the back, newest at the front), height = value.
@@ -205,7 +208,12 @@ function CameraFit() {
   return null;
 }
 
-export default function IdeaScene({ scene, active = true }: { scene: SceneData | null | undefined; active?: boolean }) {
+export default function IdeaScene({ scene, active = true }: { scene: AnyScene | null | undefined; active?: boolean }) {
+  if (scene && scene.kind === "channels") return <BreakoutScene scene={scene} active={active} />;
+  return <TerrainView scene={scene && scene.kind === "terrain" ? scene : null} active={active} />;
+}
+
+function TerrainView({ scene, active }: { scene: SceneData | null; active: boolean }) {
   const fx = typeof window === "undefined" || new URLSearchParams(window.location.search).get("fx") !== "0";
   const [hover, setHover] = useState<Cell | null>(null);
   const [spin, setSpin] = useState(true);

@@ -102,7 +102,7 @@ export type SniperInfo = {
   };
 };
 
-export type IdeaScene = {
+export type TerrainScene = {
   kind: "terrain";
   title?: string;
   x_label?: string;
@@ -118,6 +118,36 @@ export type IdeaScene = {
   enter_line?: number | null;
   live?: Record<string, { apr: number | null; held: boolean }>;
 };
+
+export type ChannelLane = {
+  coin: string;
+  close: (number | null)[];
+  upper20: (number | null)[];
+  lower20: (number | null)[];
+  upper90: (number | null)[];
+  lower90: (number | null)[];
+  lights: number[];
+  signal: number;
+  weight: number;
+  events: { i: number; L: number; kind: "entry" | "exit" }[];
+};
+
+export type ChannelScene = {
+  kind: "channels";
+  title?: string;
+  lookbacks: number[];
+  days: number;
+  last_day: string | null;
+  scale: number;
+  book_vol_pct: number;
+  gross: number;
+  target_vol_pct: number;
+  gross_cap: number;
+  lanes: ChannelLane[];
+  held?: Record<string, number>;
+};
+
+export type IdeaScene = TerrainScene | ChannelScene;
 
 export type IdeaInfo = {
   slug: string;
@@ -139,7 +169,7 @@ export type IdeaInfo = {
   kill_reason?: string;
   last_error?: string;
   last_rebalance_day?: string;
-  state?: { scores_apr_pct?: Record<string, number>; held?: string[] } & Record<string, unknown>;
+  state?: { scores_apr_pct?: Record<string, number>; held?: string[]; signal?: Record<string, number>; weights?: Record<string, number>; scale?: number; gross?: number } & Record<string, unknown>;
 };
 
 export type Performance = {
