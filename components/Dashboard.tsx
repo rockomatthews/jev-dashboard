@@ -506,9 +506,9 @@ function KalshiPanels({ k, now }: { k: KalshiInfo; now: number }) {
         </div>
         <p className="empty">
           Paper fills are earned from the real tape: a bid fills only when a later trade shows a seller at or through our price
-          (strictly through if someone else already rests there), never before a {c.latency_s ?? 1}s latency, and never for more contracts
+          (and only after every contract queued ahead of it has traded), never before a {c.latency_s ?? 1}s latency, and never for more contracts
           than actually traded. Fees follow Kalshi&apos;s schedule (taker 0.07·C·P·(1−P), maker 0.0175·C·P·(1−P), rounded up to the cent),
-          with the maker fee charged everywhere even though most series charge makers nothing. Why makers: Kalshi&apos;s own data show takers
+          with the maker fee applied only on series whose fee schedule charges makers. Why makers: Kalshi&apos;s own data show takers
           losing ~32% on average vs ~10% for makers (<a href={k.source_url} target="_blank" rel="noreferrer">{k.source}</a>).
         </p>
       </section>

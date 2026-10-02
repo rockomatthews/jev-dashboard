@@ -7,7 +7,7 @@ import data from "@/lib/backtests.json";
 // on one log-scale axis. Hover for the value of every visible line at that week.
 
 type Row = {
-  key: string; n: number; name: string;
+  key: string; n: number; name: string; slide?: string | null;
   stats: { from: string; to: string; sharpe: number; ci95: [number, number]; ret_yr_pct: number; vol_pct: number;
     max_dd_pct: number; worst_day_pct: number; final_10k: number; last_12m_pct: number; by_year_pct: Record<string, number> };
   curve: [number, number][];
@@ -16,20 +16,24 @@ type Row = {
 const ROWS = (data as unknown as { strategies: Row[] }).strategies;
 const BY_KEY: Record<string, Row> = Object.fromEntries(ROWS.map((r) => [r.key, r]));
 
-// fixed categorical order (validated dark-mode slots 1-5); BTC is the neutral benchmark
-const SERIES: { key: string; label: string; color: string; dash?: string }[] = [
-  { key: "S1", label: "S1 Trend", color: "#3987e5" },
-  { key: "S6@80", label: "S6 Breakout Rocket", color: "#d95926" },
-  { key: "S3", label: "S3 Funding carry", color: "#199e70" },
-  { key: "S4", label: "S4 Alt/BTC trend", color: "#c98500" },
-  { key: "S5", label: "S5 Vol-managed momentum", color: "#d55181" },
-  { key: "BTC", label: "Bitcoin buy & hold", color: "#8a8f9c", dash: "5 4" },
-];
-
-export const SLIDE_TO_BACKTEST: Record<string, string> = {
-  trend: "S1", "idea:donchian_breakout": "S6@80", "idea:funding_carry": "S3", "idea:alt_btc_trend": "S4",
-  "idea:vol_managed_momentum": "S5",
+// Colour follows the strategy (its number), never its rank: validated dark-mode categorical slots in fixed
+// order. BTC is the neutral, dashed benchmark. Plotted = each strategy's live setting (rows tagged with a slide).
+const COLOR_BY_N: Record<number, string> = {
+  1: "#3987e5", 6: "#d95926", 3: "#199e70", 4: "#c98500", 5: "#d55181", 8: "#9085e9", 9: "#e66767", 10: "#008300",
 };
+const SERIES: { key: string; label: string; color: string; dash?: string }[] = ROWS
+  .filter((r) => r.slide)
+  .map((r) => r.slide === "benchmark"
+    ? { key: r.key, label: "Bitcoin buy & hold", color: "#8a8f9c", dash: "5 4" }
+    : { key: r.key, label: `S${r.n} ${r.name.replace(/\s*\(.*\)\s*$/, "").replace(/\s*@.*$/, "")}`, color: COLOR_BY_N[r.n] ?? "#aab2c5" });
+
+const LIVE = ROWS.filter((r) => r.slide && r.slide !== "benchmark");
+const LOSERS = LIVE.filter((r) => r.stats.last_12m_pct < 0).length;
+const BTC12 = ROWS.find((r) => r.slide === "benchmark")?.stats.last_12m_pct ?? null;
+
+export const SLIDE_TO_BACKTEST: Record<string, string> = Object.fromEntries(
+  ROWS.filter((r) => r.slide && r.slide !== "benchmark").map((r) => [r.slide as string, r.key]),
+);
 
 function money(v: number) {
   if (v >= 1e6) return `$${(v / 1e6).toFixed(v >= 1e7 ? 0 : 1)}M`;
@@ -153,8 +157,8 @@ export default function BacktestLab({ focus }: { focus: string | null }) {
       <table className="bt-table">
         <thead><tr><th>Strategy</th><th className="r">$10k became</th><th className="r">Return / yr</th><th className="r">Sharpe (95% range)</th><th className="r">Worst drawdown</th><th className="r">Last 12 months</th><th className="r">Since</th></tr></thead>
         <tbody>
-          {["S1", "S6@60", "S6@80", "S6@100", "S6@120", "S6@150", "S3", "S4", "S5", "BTC"].filter((k) => BY_KEY[k]).map((k) => {
-            const r = BY_KEY[k];
+          {ROWS.map((r) => {
+            const k = r.key;
             return (
               <tr key={k} className={k === focus ? "row--live" : ""}>
                 <td className="coin">{r.name}</td>
@@ -170,8 +174,8 @@ export default function BacktestLab({ focus }: { focus: string | null }) {
         </tbody>
       </table>
       <p className="empty">
-        Read this honestly: the big numbers come from 2021 and 2023, and every directional strategy lost money over the last
-        12 months while Bitcoin fell 28.5%. The coin list is today&apos;s survivors, which flatters long-only results. Above ~100%
+        Read this honestly: the big numbers come from 2021 and 2023. Over the last 12 months {LOSERS} of {LIVE.length} live
+        strategies lost money while Bitcoin moved {BTC12 === null ? "—" : pctS(BTC12)}. The coin list is today&apos;s survivors, which flatters long-only results. Above ~100%
         target volatility the Breakout Rocket stops growing and only adds drawdown — that is why the live book sits at 80%.
         Funding carry only has two years of data. None of this is a promise about the next 12 months.
       </p>
