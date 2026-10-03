@@ -127,12 +127,14 @@ function LiveBeacons({ sc }: { sc: SceneData }) {
     <group ref={g}>
       {sc.x.map((coin, i) => {
         const l = sc.live?.[coin];
-        if (!l || l.apr === null || l.apr === undefined) return null;
-        const h = Math.max(0.03, Math.abs(clamp(l.apr, Y_MIN, Y_MAX)) * Y_PER);
-        const col = l.held ? C_HELD.clone().multiplyScalar(2.2) : valueColor(l.apr, sc.ref_plane ?? 0).multiplyScalar(1.4);
+        const raw = l ? l[sc.live_key ?? "apr"] : undefined;
+        if (!l || typeof raw !== "number") return null;
+        const v = raw;
+        const h = Math.max(0.03, Math.abs(clamp(v, Y_MIN, Y_MAX)) * Y_PER);
+        const col = l.held ? C_HELD.clone().multiplyScalar(2.2) : valueColor(v, sc.ref_plane ?? 0).multiplyScalar(1.4);
         return (
           <group key={coin} position={[xAt(i), 0, liveZ]}>
-            <mesh position={[0, l.apr >= 0 ? h / 2 : -h / 2, 0]}>
+            <mesh position={[0, v >= 0 ? h / 2 : -h / 2, 0]}>
               <cylinderGeometry args={[dx * 0.2, dx * 0.2, h, 12]} />
               <meshBasicMaterial color={col} toneMapped={false} transparent opacity={l.held ? 0.95 : 0.55} />
             </mesh>
@@ -140,7 +142,7 @@ function LiveBeacons({ sc }: { sc: SceneData }) {
               <Html position={[0, h + 0.35, 0]} center style={{ pointerEvents: "none" }}>
                 <div className="scene-label scene-label--held">
                   <span className="scene-label__coin">{coin}</span>
-                  <span>{l.apr.toFixed(0)}%</span>
+                  <span>{v.toFixed(0)}%</span>
                 </div>
               </Html>
             )}

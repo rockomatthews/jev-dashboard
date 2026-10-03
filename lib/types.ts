@@ -116,7 +116,9 @@ export type TerrainScene = {
   ref_plane?: number | null;
   ref_label?: string;
   enter_line?: number | null;
-  live?: Record<string, { apr: number | null; held: boolean }>;
+  // live beacons: one reading per coin; live_key names the field to plot (default "apr")
+  live?: Record<string, { held: boolean; apr?: number | null; [k: string]: number | string | boolean | null | undefined }>;
+  live_key?: string;
 };
 
 export type KalshiMarket = {
