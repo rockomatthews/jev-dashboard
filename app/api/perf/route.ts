@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const data = await loadPerformance();
   return NextResponse.json(data, {
-    // CDN absorbs viewer traffic: at most ~3 Redis reads/min however many people watch.
+    // CDN absorbs viewer traffic: at most ~3 Supabase reads/min however many people watch.
     headers: { "Cache-Control": "public, s-maxage=20, stale-while-revalidate=40" },
   });
 }

@@ -6,7 +6,7 @@ import { isPerformance } from "@/lib/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_BYTES = 512 * 1024;
+const MAX_BYTES = 4 * 1024 * 1024; // Vercel functions accept up to 4.5 MB; the full snapshot is ~1.3 MB
 
 function authorized(header: string | null): boolean {
   const secret = process.env.INGEST_SECRET;
