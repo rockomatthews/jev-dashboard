@@ -723,6 +723,13 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               <span><i className="swatch swatch--loss" /> stop-out</span>
               <span className="legend__note">one lane per coin (strongest in front) · x: last 90 days · gold cones: breakouts (bigger = longer lookback) · right: nine breakout lights 5d→360d and today&apos;s weight · drag to orbit, hover a lane</span>
             </div>
+          ) : isIdea && p.scene?.kind === "rider" ? (
+            <div className="legend" aria-label="Legend">
+              <span><i className="swatch swatch--carry-high" /> rising (7-day momentum)</span>
+              <span><i className="swatch swatch--loss" /> falling</span>
+              <span><i className="swatch swatch--held" /> the one coin being ridden</span>
+              <span className="legend__note">one lane per dev-vetted coin (purple Solana · blue Base · green Robinhood chain) · depth: last 30 days, every 6h, newest in front · the gold orb replays the ride and hops lanes when a trend breaks · front row: live scores · drag to orbit, hover a bar</span>
+            </div>
           ) : isIdea ? (
             <div className="legend" aria-label="Legend">
               <span><i className="swatch swatch--carry-low" /> funding below baseline</span>

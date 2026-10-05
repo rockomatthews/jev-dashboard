@@ -173,7 +173,25 @@ export type ChannelScene = {
   held?: Record<string, number>;
 };
 
-export type IdeaScene = TerrainScene | ChannelScene;
+export type RiderScene = {
+  kind: "rider";
+  title?: string;
+  subtitle?: string;
+  x: string[];                 // coins
+  z: string[];                 // time steps (oldest first), "YYYY-MM-DDTHH"
+  y: (number | null)[][];      // [step][coin] 7-day risk-adjusted momentum score
+  y_label?: string;
+  path: (string | null)[];     // coin ridden at each step (null = cash)
+  equity?: number[];           // book equity (1 = start of the window) at each step
+  dev_score?: Record<string, number>;
+  chain?: Record<string, "solana" | "base" | "robinhood">;
+  generated?: string;
+  live?: Record<string, { held: boolean; score?: number | null; [k: string]: number | string | boolean | null | undefined }>;
+  live_key?: string;
+  live_ride?: { coin?: string; entry_px?: number; peak?: number; stop?: number } | null;
+};
+
+export type IdeaScene = TerrainScene | ChannelScene | RiderScene;
 
 export type IdeaInfo = {
   slug: string;
