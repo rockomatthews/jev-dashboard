@@ -723,6 +723,14 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               <span><i className="swatch swatch--loss" /> stop-out</span>
               <span className="legend__note">one lane per coin (strongest in front) · x: last 90 days · gold cones: breakouts (bigger = longer lookback) · right: nine breakout lights 5d→360d and today&apos;s weight · drag to orbit, hover a lane</span>
             </div>
+          ) : isIdea && p.scene?.kind === "jumps" ? (
+            <div className="legend" aria-label="Legend">
+              <span><i className="swatch swatch--carry-high" /> coin-specific jump</span>
+              <span><i className="swatch swatch--gain" /> drift after it, up</span>
+              <span><i className="swatch swatch--loss" /> drift after it, down</span>
+              <span><i className="swatch swatch--held" /> days held</span>
+              <span className="legend__note">one lane per altcoin · depth: last 120 days, newest in front · line: each coin&apos;s move after stripping out Bitcoin, in sigmas · spires: jumps above the {p.scene.threshold}-sigma plane, arcs: the next {p.scene.hold_days} days · front row: today · drag to orbit, hover a spire</span>
+            </div>
           ) : isIdea && p.scene?.kind === "rider" ? (
             <div className="legend" aria-label="Legend">
               <span><i className="swatch swatch--carry-high" /> rising (7-day momentum)</span>

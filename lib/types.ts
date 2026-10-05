@@ -191,7 +191,27 @@ export type RiderScene = {
   live_ride?: { coin?: string; entry_px?: number; peak?: number; stop?: number } | null;
 };
 
-export type IdeaScene = TerrainScene | ChannelScene | RiderScene;
+export type JumpEvent = { i: number; j: number; z: number; jump_pct: number; drift_pct: number[] };
+
+export type JumpScene = {
+  kind: "jumps";
+  title?: string;
+  x: string[];                 // altcoins (most jumps in the last 2 years first)
+  z: string[];                 // days, oldest first
+  y: (number | null)[][];      // [day][coin] BTC-residual move in sigmas
+  held: number[][];            // [day][coin] 1 = held over the next day
+  events: JumpEvent[];         // jumps above the threshold and the coin's residual drift after them
+  y_label?: string;
+  threshold: number;
+  hold_days: number;
+  avg_drift_pct?: number | null;
+  hit_rate_pct?: number | null;
+  live?: Record<string, { held: boolean; z?: number | null; days_left?: number; [k: string]: number | string | boolean | null | undefined }>;
+  live_key?: string;
+  live_btc_hedge?: number | null;
+};
+
+export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene;
 
 export type IdeaInfo = {
   slug: string;

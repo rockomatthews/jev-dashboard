@@ -10,6 +10,7 @@ import type { IdeaScene as AnyScene, TerrainScene as SceneData } from "@/lib/typ
 
 const BreakoutScene = dynamic(() => import("./BreakoutScene"), { ssr: false });
 const RiderScene = dynamic(() => import("./RiderScene"), { ssr: false });
+const JumpScene = dynamic(() => import("./JumpScene"), { ssr: false });
 
 // Generic 3D view for idea-lab strategies. kind "terrain": a landscape of bars,
 // x = category (coin), z = time (oldest at the back, newest at the front), height = value.
@@ -214,6 +215,7 @@ function CameraFit() {
 export default function IdeaScene({ scene, active = true }: { scene: AnyScene | null | undefined; active?: boolean }) {
   if (scene && scene.kind === "channels") return <BreakoutScene scene={scene} active={active} />;
   if (scene && scene.kind === "rider") return <RiderScene scene={scene} active={active} />;
+  if (scene && scene.kind === "jumps") return <JumpScene scene={scene} active={active} />;
   return <TerrainView scene={scene && scene.kind === "terrain" ? scene : null} active={active} />;
 }
 
