@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { demoSniperPerf } from "@/lib/demo-sniper";
 import BacktestLab, { SLIDE_TO_BACKTEST } from "./BacktestLab";
 import { ago, arrow, num, pct, polarity, price, signedUsd, usd, when } from "@/lib/format";
-import type { IdeaInfo, KalshiInfo, Performance, PerfResponse, RadarItem, SniperInfo } from "@/lib/types";
+import type { IdeaInfo, KalshiInfo, MetaInfo, Performance, PerfResponse, RadarItem, SniperInfo } from "@/lib/types";
 
 const Scene = dynamic(() => import("./Scene"), {
   ssr: false,
@@ -22,6 +22,11 @@ const KalshiScene = dynamic(() => import("./KalshiScene"), {
   loading: () => <div className="scene-loading">Raising the order-book towers…</div>,
 });
 
+const MetaScene = dynamic(() => import("./MetaScene"), {
+  ssr: false,
+  loading: () => <div className="scene-loading">Raising the market-cap elevator…</div>,
+});
+
 const IdeaScene = dynamic(() => import("./IdeaScene"), {
   ssr: false,
   loading: () => <div className="scene-loading">Raising the landscape…</div>,
@@ -29,6 +34,9 @@ const IdeaScene = dynamic(() => import("./IdeaScene"), {
 
 const POLL_MS = 30_000;
 const STALE_AFTER_MS = 5 * 60_000;
+// idea-lab books are re-marked every 5 minutes (config idealab.interval_s = 300), so they are only stale
+// after three missed marks - with a 5-minute threshold they flickered to OFFLINE between marks
+const IDEA_STALE_AFTER_MS = 15 * 60_000;
 
 type SlideKey = string; // "trend" | "sniper" | "idea:<slug>"
 type Slide = { key: SlideKey; n: number; name: string; blurb: string };
@@ -51,7 +59,11 @@ function buildSlides(perf: Performance): Slide[] {
     ? [{ key: "kalshi", n: 7, name: "Kalshi in-and-out scalper",
         blurb: "prediction markets · rest inside the spread, flip within seconds · naive buy-then-sell tracked as a control" }]
     : [];
-  return [...BASE_SLIDES, ...ideas, ...kalshi];
+  const meta: Slide[] = perf.strategies?.metasniper?.sniper
+    ? [{ key: "metasniper", n: 12, name: "Metadata Movers",
+        blurb: "new Solana/Base memecoins with description + website + X · buy under $1M market cap · sell at $3M" }]
+    : [];
+  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta];
 }
 
 function Pol({ v, children }: { v: number; children: React.ReactNode }) {
@@ -365,6 +377,132 @@ function SniperPanels({ p, sn, demo, now }: { p: Performance; sn: SniperInfo; de
 }
 
 // =============================================================================================
+// Strategy 12 panels (Metadata Movers): rules, radar with metadata, holdings with market-cap progress
+// =============================================================================================
+function MetaPanels({ p, m, now }: { p: Performance; m: MetaInfo; now: number }) {
+  const c = m.config;
+  const live = m.radar.filter((r) => r.status !== "rejected").slice(0, 20);
+  const counts = m.radar.reduce<Record<string, number>>((acc, r) => {
+    acc[r.status] = (acc[r.status] ?? 0) + 1;
+    return acc;
+  }, {});
+  const rejects = Object.entries(
+    m.radar.filter((r) => r.status === "rejected").reduce<Record<string, number>>((acc, r) => {
+      acc[r.why || "other"] = (acc[r.why || "other"] ?? 0) + 1;
+      return acc;
+    }, {}),
+  ).sort((a, b) => b[1] - a[1]);
+  const near = m.radar.filter((r) => r.status === "rejected" && r.score >= 1 && r.mc > 0).slice(0, 10);
+  const metaIcons = (r: { has_desc?: boolean; website?: string; twitter?: string }) => (
+    <span className="muted">
+      {r.has_desc ? "📝" : "·"}{" "}
+      {r.website ? <a href={r.website} target="_blank" rel="noreferrer">🌐</a> : "·"}{" "}
+      {r.twitter ? <a href={r.twitter} target="_blank" rel="noreferrer">𝕏</a> : "·"}
+    </span>
+  );
+  return (
+    <>
+      <section className="panel">
+        <h2>Strategy 12 <span className="panel__hint">{p.status.decider} · paper · own {usd(c.start_balance, false)}</span></h2>
+        <p className="strategy__what">
+          New memecoins whose teams have already paid to show a description, a website and an X account (DexScreener&apos;s
+          token profile / Enhanced Token Info, which aggregators and the Coinbase app&apos;s token pages pick up) look legitimate
+          and get seen early. Every minute the bot pulls the newest token profiles, community takeovers and boosts on{" "}
+          {(c.chains ?? [c.chain]).join(" and ")}, and buys every coin that has all three pieces of metadata, a market cap between{" "}
+          {compactUsd(c.min_mc)} and {compactUsd(c.max_entry_mc)}, a pair younger than {c.max_age_h} hours, a pool of at least{" "}
+          {compactUsd(c.min_liquidity)} and some trading in the last hour - {pct(c.position_frac, 0)} of equity each (never more than{" "}
+          {pct(c.max_liq_frac, 0)} of the pool), up to {c.max_open} at once. It sells the whole position when the market cap reaches{" "}
+          {compactUsd(c.target_mc)}.
+        </p>
+        <div className="rules">
+          <span className="rule rule--gain">sell all at {compactUsd(c.target_mc)} market cap</span>
+          <span className="rule rule--loss">stop {pct(c.stop_loss, 0, true)}</span>
+          <span className="rule rule--loss">rug exit: liquidity −{pct(c.rug_liquidity_drop, 0)}</span>
+          <span className="rule">time stop {fmtAge(c.max_hold_h * 60)}</span>
+          <span className="rule">no re-entry {c.reentry_block_h}h</span>
+          <span className="rule rule--loss">kill at {pct(-c.max_drawdown, 0)} · day stop {pct(-c.max_daily_loss, 0)}</span>
+        </div>
+        <p className="empty">
+          No backtest exists (DexScreener keeps no history of when a profile appeared), so this paper book is the test.
+          Fills use the same AMM model as Strategy 2: pool-depth price impact, {pct(c.dex_fee, 1)} DEX fee, {usd(c.priority_fee_usd)} per
+          swap and {pct(c.latency_slip, 0)} latency slippage each way. The stop, rug exit and time stop are safety additions to the
+          buy-under-$1M / sell-at-$3M rule.
+        </p>
+        <div className="scanmeta">
+          <span><b>{m.radar.length}</b> coins on radar</span>
+          <span><b>{counts.candidate ?? 0}</b> targets</span>
+          <span><b>{counts.held ?? 0}</b> held</span>
+          <span><b>{counts.rejected ?? 0}</b> rejected</span>
+          <span><b>{num(m.scanned_total, 0)}</b> pairs scanned total</span>
+          <span>last scan <b>{m.last_scan_ms ? ago(m.last_scan_ms, now) : "pending"}</b></span>
+          <span><b>{usd(m.deployed ?? 0, false)}</b> deployed</span>
+          {m.kill_reason && <span className="pol pol--loss">⛔ {m.kill_reason}</span>}
+          {m.last_error && <span className="pol pol--loss">⚠ {m.last_error}</span>}
+        </div>
+        {rejects.length > 0 && (
+          <p className="empty">Rejected by filter: {rejects.map(([w, n]) => `${w} ${n}`).join(" · ")}</p>
+        )}
+      </section>
+
+      <section className="panel">
+        <h2>Metadata Movers holdings <span className="panel__hint">{m.holdings.length} of {c.max_open} slots · sells at {compactUsd(c.target_mc)}</span></h2>
+        {m.holdings.length === 0 ? (
+          <p className="empty">No open positions. Cash waits for a new coin with description + website + X under {compactUsd(c.max_entry_mc)}.</p>
+        ) : (
+          <table>
+            <thead><tr><th>Token</th><th>Chain</th><th className="r">Cost</th><th className="r">Entry mc</th><th className="r">Mc now</th><th className="r">To target</th><th className="r">Return</th><th className="r">Pool</th><th className="r">Held</th><th>Links</th></tr></thead>
+            <tbody>
+              {m.holdings.map((h) => (
+                <tr key={h.key}>
+                  <td className="coin">{h.url ? <a href={h.url} target="_blank" rel="noreferrer">${h.symbol}</a> : `$${h.symbol}`}</td>
+                  <td className="muted">{h.chain ?? "—"}</td>
+                  <td className="r">{usd(h.cost_usd, false)}</td>
+                  <td className="r muted">{compactUsd(h.entry_mc ?? 0)}</td>
+                  <td className="r">{compactUsd(h.last_mc ?? 0)}</td>
+                  <td className="r">{pct((h.last_mc ?? 0) / c.target_mc, 0)}</td>
+                  <td className="r"><b><Pol v={h.ret}>{pct(h.ret, 1, true)}</Pol></b></td>
+                  <td className="r muted">{compactUsd(h.last_liquidity)}</td>
+                  <td className="r muted">{fmtAge((now - h.opened_ms) / 60000)}</td>
+                  <td>{metaIcons({ has_desc: true, website: h.website, twitter: h.twitter })}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section className="panel">
+        <h2>Radar <span className="panel__hint">targets, held and cooling-down coins right now · 📝 description · 🌐 website · 𝕏 account</span></h2>
+        {live.length === 0 ? (
+          <p className="empty">Nothing with full metadata under {compactUsd(c.max_entry_mc)} this minute. The bot waits.</p>
+        ) : (
+          <table>
+            <thead><tr><th>Token</th><th>Chain</th><th>Status</th><th className="r">Market cap</th><th className="r">Age</th><th className="r">Pool</th><th className="r">1h</th><th>Metadata</th></tr></thead>
+            <tbody>
+              {live.map((r) => (
+                <tr key={`${r.chain}-${r.token}`} className={r.status === "held" ? "row--held" : r.status === "candidate" ? "row--live" : ""}>
+                  <td className="coin">{r.url ? <a href={r.url} target="_blank" rel="noreferrer">${r.symbol}</a> : `$${r.symbol}`}</td>
+                  <td className="muted">{r.chain ?? "—"}</td>
+                  <td><StatusPill s={r.status} /></td>
+                  <td className="r">{compactUsd(r.mc)}</td>
+                  <td className="r">{fmtAge(r.age_min)}</td>
+                  <td className="r">{compactUsd(r.liquidity)}</td>
+                  <td className="r"><Pol v={r.chg1h}>{pct(r.chg1h / 100, 0, true)}</Pol></td>
+                  <td>{metaIcons(r)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {near.length > 0 && (
+          <p className="empty">Full metadata but filtered out: {near.map((r) => `$${r.symbol} ${compactUsd(r.mc)} (${r.why})`).join(" · ")}</p>
+        )}
+      </section>
+    </>
+  );
+}
+
+// =============================================================================================
 // Idea-lab panels: the idea, its research, today's scores and live pairs
 // =============================================================================================
 function IdeaPanels({ p, idea }: { p: Performance; idea: IdeaInfo }) {
@@ -610,11 +748,15 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const slideKey = SLIDES[slideIdx].key;
   const isSniper = slideKey === "sniper";
   const isKalshi = slideKey === "kalshi";
+  const isMeta = slideKey === "metasniper";
+  const metaPerf = data.perf.strategies?.metasniper;
   const kalshiPerf = data.perf.strategies?.kalshi;
   const ideaPerf = slideKey.startsWith("idea:") ? data.perf.strategies?.[slideKey as `idea:${string}`] : undefined;
   const idea = ideaPerf?.idea;
   const isIdea = !!(ideaPerf && idea);
-  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isIdea ? (ideaPerf as Performance) : data.perf;
+  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isMeta && metaPerf ? metaPerf
+    : isIdea ? (ideaPerf as Performance) : data.perf;
+  const meta = isMeta && p.sniper ? (p.sniper as unknown as MetaInfo) : undefined;
   const kal = isKalshi ? p.kalshi : undefined;
   const sn = isSniper ? p.sniper : undefined;
   const t = p.trades;
@@ -627,7 +769,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   };
 
   const age = now - p.updated_ms;
-  const staleAfter = data.source === "snapshot" ? 90 * 60_000 : STALE_AFTER_MS;
+  const staleAfter = data.source === "snapshot" ? 90 * 60_000 : isIdea ? IDEA_STALE_AFTER_MS : STALE_AFTER_MS;
   const state = data.source === "demo" || (isSniper && sniperDemo) ? "demo" : age > staleAfter ? "offline" : "live";
   const stateLabel = {
     live: data.source === "snapshot" ? "LIVE · 30-MIN SNAPSHOTS" : "LIVE",
@@ -643,6 +785,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const since = p.curve.length ? p.curve[0][0] : p.updated_ms;
   const tickerItems: [string, string][] = isSniper
     ? (sn?.radar ?? []).filter((r) => r.status !== "rejected").slice(0, 24).map((r) => [`$${r.symbol}`, `${pct(r.chg5 / 100, 1, true)} · ${r.score.toFixed(2)}`])
+    : isMeta
+      ? (meta?.radar ?? []).filter((r) => r.status !== "rejected").slice(0, 24).map((r) => [`$${r.symbol}`, `${compactUsd(r.mc)} mc · ${r.chain ?? ""}`])
     : isKalshi
       ? (kal?.markets ?? []).map((m) => [m.ticker, `${Math.round((m.bids[0]?.[0] ?? m.bid) * 100)}¢ / ${Math.round((m.asks[0]?.[0] ?? m.ask) * 100)}¢`])
     : isIdea
@@ -659,6 +803,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             {isSniper
               ? "paper trading · Solana DEX memecoins · DexScreener radar"
               : isKalshi ? "paper trading · Kalshi prediction markets · public order books + trade tape"
+              : isMeta ? "paper trading · Solana + Base memecoins · DexScreener profiles (description + website + X)"
               : isIdea ? `paper trading · idea lab · ${idea?.venue ?? "hyperliquid"}`
               : `paper trading · Hyperliquid perps · decisions by ${p.status.decider ?? (p.status.jev === "jev" ? "Jev" : "mock Jev")}`}
           </span>
@@ -677,6 +822,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         equities={SLIDES.map((s) => s.key === "trend" ? data.perf.equity
           : s.key === "sniper" ? (sniperDemo ? null : sniperPerf.equity)
           : s.key === "kalshi" ? (kalshiPerf?.equity ?? null)
+          : s.key === "metasniper" ? (metaPerf?.equity ?? null)
             : data.perf.strategies?.[s.key as `idea:${string}`]?.equity ?? null)} />
 
       <div key={slideKey} className={`slide slide--from-${dir}`}>
@@ -692,7 +838,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
 
         <section className="hero">
           <div>
-            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
+            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
             <div className="hero__equity">{usd(p.equity)}</div>
             <div className="hero__pnl">
               <Pol v={p.pnl}>{arrow(p.pnl)} {signedUsd(p.pnl)} ({pct(p.pnl_pct, 2, true)})</Pol>
@@ -757,9 +903,10 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
 
       </div>
 
-      <section className={`scene ${isSniper ? "scene--sniper" : isIdea || isKalshi ? "scene--idea" : ""}`}
+      <section className={`scene ${isSniper ? "scene--sniper" : isIdea || isKalshi || isMeta ? "scene--idea" : ""}`}
         aria-label={isSniper ? "3D cluster map of Solana pairs the sniper is tracking"
           : isKalshi ? "3D order-book towers for the Kalshi markets the scalper works"
+          : isMeta ? "3D market-cap elevator of new memecoins with metadata, Solana and Base"
           : isIdea ? `3D view for strategy ${idea?.n}: ${p.scene?.title ?? idea?.name}`
             : "3D view of the equity curve and per-coin P&L"}>
         <div className={`scene__layer ${slideKey === "trend" ? "scene__layer--on" : ""}`} aria-hidden={slideKey !== "trend"}>
@@ -775,6 +922,11 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             <KalshiScene info={kalshiPerf.kalshi} active={isKalshi} />
           </div>
         )}
+        {visited.metasniper && metaPerf?.sniper && (
+          <div className={`scene__layer ${isMeta ? "scene__layer--on" : ""}`} aria-hidden={!isMeta}>
+            <MetaScene info={metaPerf.sniper as unknown as MetaInfo} active={isMeta} />
+          </div>
+        )}
         {SLIDES.filter((s) => s.key.startsWith("idea:") && visited[s.key]).map((s) => (
           <div key={s.key} className={`scene__layer ${slideKey === s.key ? "scene__layer--on" : ""}`} aria-hidden={slideKey !== s.key}>
             <IdeaScene scene={data.perf.strategies?.[s.key as `idea:${string}`]?.scene} active={slideKey === s.key} />
@@ -787,7 +939,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           <Stat label="Total P&L" value={signedUsd(p.pnl)} v={p.pnl} sub={pct(p.pnl_pct, 2, true)} />
           <Stat label="Realized" value={signedUsd(p.realized)} v={p.realized} sub="price P&L on closed size" />
           <Stat label="Unrealized" value={signedUsd(p.unrealized)} v={p.unrealized} sub={`${t.open} open position${t.open === 1 ? "" : "s"}`} />
-          {isSniper ? (
+          {isSniper || isMeta ? (
             <Stat label="Swap costs" value={signedUsd(-p.fees)} v={-p.fees} sub="DEX fee + priority fee (impact is in the price)" />
           ) : (
             <Stat label="Fees + funding" value={signedUsd(p.funding - p.fees)} v={p.funding - p.fees}
@@ -805,6 +957,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
 
         {isSniper && sn ? <SniperPanels p={p} sn={sn} demo={sniperDemo} now={now} />
           : isKalshi && kal ? <KalshiPanels k={kal} now={now} />
+          : isMeta && meta ? <MetaPanels p={p} m={meta} now={now} />
           : isIdea && idea ? <IdeaPanels p={p} idea={idea} /> : <TrendPanels p={p} />}
 
         {data.perf.ideas && data.perf.ideas.length > 0 && (
@@ -951,6 +1104,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             ? "Paper trading only — Kalshi orders are simulated against the public order books and trade tape with Kalshi's fee schedule; nothing is sent to Kalshi. Not investment advice."
             : isIdea
             ? `Paper trading only — idea-lab book with its own ${usd(p.start_balance, false)}. Both legs are simulated Hyperliquid market orders (perp 4.5 bp, spot 7 bp taker, plus spread and latency); funding is settled hourly at the exchange's rate. Not investment advice.`
+            : isMeta
+            ? "Paper trading only — simulated Solana/Base swaps priced from real DexScreener pool data with AMM price impact, DEX fee, gas/priority fee and latency slippage. Metadata is a visibility signal, not a safety check: most new memecoins still go to zero. Not investment advice."
             : isSniper
             ? "Paper trading only — simulated swaps priced from real DexScreener pool data with AMM price impact, DEX and priority fees and latency slippage. Most new memecoins go to zero; this measures whether filters and exits beat that. Not investment advice."
             : `Paper trading only — simulated fills against real Hyperliquid order books, including fees, slippage and funding. Not investment advice. Step ${p.status.step ?? "—"} · ${p.status.coins?.join(" · ") ?? ""}`}

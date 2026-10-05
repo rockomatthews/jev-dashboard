@@ -102,6 +102,45 @@ export type SniperInfo = {
   };
 };
 
+// Strategy 12: Metadata Movers (same engine and payload shape as the sniper, mode "meta")
+export type MetaRadarItem = RadarItem & {
+  mc: number;
+  chain: string | null;
+  has_desc: boolean;
+  website: string;
+  twitter: string;
+  description?: string;
+};
+
+export type MetaHolding = SniperHolding & {
+  chain?: string;
+  entry_mc?: number;
+  last_mc?: number;
+  peak_mc?: number;
+  url?: string | null;
+  website?: string;
+  twitter?: string;
+};
+
+export type MetaInfo = {
+  mode: "meta";
+  radar: MetaRadarItem[];
+  scanned_total: number;
+  last_scan_ms: number;
+  kill_reason: string;
+  last_error?: string;
+  deployed?: number;
+  holdings: MetaHolding[];
+  config: {
+    start_balance: number; chain: string; chains: string[];
+    max_entry_mc: number; min_mc: number; max_age_h: number; min_liquidity: number; min_h1_volume: number;
+    min_score: number; target_mc: number; stop_loss: number; rug_liquidity_drop: number; max_hold_h: number;
+    position_frac: number; max_liq_frac: number; max_open: number; dex_fee: number; priority_fee_usd: number;
+    latency_slip: number; max_drawdown: number; max_daily_loss: number; reentry_block_h: number;
+    manage_interval_s: number; note?: string;
+  };
+};
+
 export type TerrainScene = {
   kind: "terrain";
   title?: string;
@@ -290,7 +329,7 @@ export type Performance = {
   sniper?: SniperInfo;
   kalshi?: KalshiInfo;
   ideas?: { date: string; name: string; source: string; rule: string; status: string; verdict: string; sharpe?: number | null }[];
-  strategies?: { sniper?: Performance; kalshi?: Performance } & { [key: `idea:${string}`]: Performance | undefined };
+  strategies?: { sniper?: Performance; kalshi?: Performance; metasniper?: Performance } & { [key: `idea:${string}`]: Performance | undefined };
   idea?: IdeaInfo;
   scene?: IdeaScene | null;
   status: {
