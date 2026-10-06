@@ -10,9 +10,9 @@ import type { MetaInfo, MetaRadarItem } from "@/lib/types";
 
 // Strategy 12 "Metadata Movers": a market-cap elevator. Height = market cap (log, $10k floor to $10M);
 // x = how new the pair is (log hours, newest on the left); depth = chain (Solana behind, Base in front).
-// Two glowing floors: the $1M entry ceiling (buy below it) and the $3M sell line. Each coin carries three
+// Two glowing floors: the $1M entry ceiling (buy below it) and the $3M line where the trailing stop tightens. Each coin carries three
 // small beads for its metadata (description, website, X): all three lit = eligible. Held coins are gold,
-// with a beam from their entry market cap up to the $3M target.
+// with a beam from their entry market cap to now and a ring at the price where the trail would sell.
 
 const X_HALF = 8;
 const Z_HALF = 3.2;
@@ -127,9 +127,15 @@ function Beams({ info }: { info: MetaInfo }) {
           <group key={h.key}>
             <Line points={[[x, y0, z], [x, target, z]]} color="#ffc94d" lineWidth={1} dashed dashSize={0.12} gapSize={0.1} transparent opacity={0.6} />
             <Line points={[[x, y0, z], [x, y1, z]]} color={y1 >= y0 ? "#7dffb0" : "#d96b25"} lineWidth={3} toneMapped={false} />
+            {h.trail_armed && h.trail_pct && h.peak_mc ? (
+              <mesh position={[x, ay(h.peak_mc * (1 - h.trail_pct)), z]} rotation={[Math.PI / 2, 0, 0]}>
+                <torusGeometry args={[0.32, 0.03, 8, 32]} />
+                <meshBasicMaterial color={new THREE.Color("#ff5a7a").multiplyScalar(2)} toneMapped={false} />
+              </mesh>
+            ) : null}
             <Html position={[x, target + 0.25, z]} center style={{ pointerEvents: "none" }}>
               <div className="scene-label scene-label--held"><span className="scene-label__coin">${h.symbol}</span>
-                <span>{Math.round(((h.last_mc ?? 0) / info.config.target_mc) * 100)}% to target</span></div>
+                <span>{h.trail_armed && h.trail_pct ? `trail −${Math.round(h.trail_pct * 100)}%` : `${Math.round(h.ret * 100)}%`}</span></div>
             </Html>
           </group>
         );
@@ -225,7 +231,7 @@ export default function MetaScene({ info, active = true }: { info: MetaInfo; act
       <Sparkles count={110} scale={[20, 8, 10]} size={1.6} speed={0.35} opacity={0.35} color="#7dffb0" />
       <group position={[0, -3.2, 0]}>
         <Floor mc={info.config.max_entry_mc} label={`$${(info.config.max_entry_mc / 1e6).toFixed(0)}M · buy below`} color="#35f0c0" opacity={0.07} />
-        <Floor mc={info.config.target_mc} label={`$${(info.config.target_mc / 1e6).toFixed(0)}M · sell`} color="#ffc94d" opacity={0.06} />
+        <Floor mc={info.config.target_mc} label={`$${(info.config.target_mc / 1e6).toFixed(0)}M · tight trail`} color="#ffc94d" opacity={0.06} />
         <Coins nodes={nodes} onHover={setHover} />
         <Beams info={info} />
         <Axes />

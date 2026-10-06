@@ -117,6 +117,11 @@ export type MetaHolding = SniperHolding & {
   entry_mc?: number;
   last_mc?: number;
   peak_mc?: number;
+  buys5?: number;
+  sells5?: number;
+  trail_armed?: boolean;
+  trail_pct?: number | null;
+  trail_exit_px?: number | null;
   url?: string | null;
   website?: string;
   twitter?: string;
@@ -138,6 +143,8 @@ export type MetaInfo = {
     position_frac: number; max_liq_frac: number; max_open: number; dex_fee: number; priority_fee_usd: number;
     latency_slip: number; max_drawdown: number; max_daily_loss: number; reentry_block_h: number;
     manage_interval_s: number; note?: string;
+    trail_arm?: number; trail_start?: number; trail_step?: number; trail_min?: number; trail_tight?: number;
+    fade_min_gain?: number; fade_buy_ratio?: number; fade_drop?: number;
   };
 };
 

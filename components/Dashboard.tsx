@@ -61,7 +61,7 @@ function buildSlides(perf: Performance): Slide[] {
     : [];
   const meta: Slide[] = perf.strategies?.metasniper?.sniper
     ? [{ key: "metasniper", n: 12, name: "Metadata Movers",
-        blurb: "new Solana/Base memecoins with description + website + X · buy under $1M market cap · sell at $3M" }]
+        blurb: "new Solana/Base memecoins with description + website + X · buy under $1M market cap · sell seconds after the peak" }]
     : [];
   return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta];
 }
@@ -411,11 +411,17 @@ function MetaPanels({ p, m, now }: { p: Performance; m: MetaInfo; now: number })
           {(c.chains ?? [c.chain]).join(" and ")}, and buys every coin that has all three pieces of metadata, a market cap between{" "}
           {compactUsd(c.min_mc)} and {compactUsd(c.max_entry_mc)}, a pair younger than {c.max_age_h} hours, a pool of at least{" "}
           {compactUsd(c.min_liquidity)} and some trading in the last hour - {pct(c.position_frac, 0)} of equity each (never more than{" "}
-          {pct(c.max_liq_frac, 0)} of the pool), up to {c.max_open} at once. It sells the whole position when the market cap reaches{" "}
-          {compactUsd(c.target_mc)}.
+          {pct(c.max_liq_frac, 0)} of the pool), up to {c.max_open} at once. There is no fixed target: held coins are re-priced every{" "}
+          {c.manage_interval_s} seconds, and once a coin is {pct(c.trail_arm ?? 0.3, 0, true)} a trailing stop follows its peak and sells
+          when it gives back {pct(c.trail_start ?? 0.25, 0)} from the top - {pct(c.trail_step ?? 0.05, 0)} less per doubling (floor{" "}
+          {pct(c.trail_min ?? 0.12, 0)}), only {pct(c.trail_tight ?? 0.08, 0)} above {compactUsd(c.target_mc)} market cap. If sellers take over
+          (5-minute buy/sell ratio {num(c.fade_buy_ratio ?? 0.7, 1)} or less) after a {pct(c.fade_min_gain ?? 0.5, 0, true)} run, it bails even earlier.
         </p>
         <div className="rules">
-          <span className="rule rule--gain">sell all at {compactUsd(c.target_mc)} market cap</span>
+          <span className="rule rule--gain">trail from the peak after {pct(c.trail_arm ?? 0.3, 0, true)}: {pct(c.trail_start ?? 0.25, 0)} → {pct(c.trail_min ?? 0.12, 0)}</span>
+          <span className="rule rule--gain">{pct(c.trail_tight ?? 0.08, 0)} trail above {compactUsd(c.target_mc)}</span>
+          <span className="rule">fade exit: sellers take over</span>
+          <span className="rule">re-priced every {c.manage_interval_s}s</span>
           <span className="rule rule--loss">stop {pct(c.stop_loss, 0, true)}</span>
           <span className="rule rule--loss">rug exit: liquidity −{pct(c.rug_liquidity_drop, 0)}</span>
           <span className="rule">time stop {fmtAge(c.max_hold_h * 60)}</span>
@@ -426,7 +432,7 @@ function MetaPanels({ p, m, now }: { p: Performance; m: MetaInfo; now: number })
           No backtest exists (DexScreener keeps no history of when a profile appeared), so this paper book is the test.
           Fills use the same AMM model as Strategy 2: pool-depth price impact, {pct(c.dex_fee, 1)} DEX fee, {usd(c.priority_fee_usd)} per
           swap and {pct(c.latency_slip, 0)} latency slippage each way. The stop, rug exit and time stop are safety additions to the
-          buy-under-$1M / sell-at-$3M rule.
+          buy-under-$1M / sell-after-the-peak rule. "Seconds after the peak" is limited by DexScreener&apos;s own refresh lag.
         </p>
         <div className="scanmeta">
           <span><b>{m.radar.length}</b> coins on radar</span>
@@ -445,12 +451,12 @@ function MetaPanels({ p, m, now }: { p: Performance; m: MetaInfo; now: number })
       </section>
 
       <section className="panel">
-        <h2>Metadata Movers holdings <span className="panel__hint">{m.holdings.length} of {c.max_open} slots · sells at {compactUsd(c.target_mc)}</span></h2>
+        <h2>Metadata Movers holdings <span className="panel__hint">{m.holdings.length} of {c.max_open} slots · sells seconds after the peak</span></h2>
         {m.holdings.length === 0 ? (
           <p className="empty">No open positions. Cash waits for a new coin with description + website + X under {compactUsd(c.max_entry_mc)}.</p>
         ) : (
           <table>
-            <thead><tr><th>Token</th><th>Chain</th><th className="r">Cost</th><th className="r">Entry mc</th><th className="r">Mc now</th><th className="r">To target</th><th className="r">Return</th><th className="r">Pool</th><th className="r">Held</th><th>Links</th></tr></thead>
+            <thead><tr><th>Token</th><th>Chain</th><th className="r">Cost</th><th className="r">Entry mc</th><th className="r">Mc now</th><th className="r">Peak mc</th><th className="r">Return</th><th className="r">Sells below</th><th className="r">Pool</th><th className="r">Held</th><th>Links</th></tr></thead>
             <tbody>
               {m.holdings.map((h) => (
                 <tr key={h.key}>
@@ -459,8 +465,9 @@ function MetaPanels({ p, m, now }: { p: Performance; m: MetaInfo; now: number })
                   <td className="r">{usd(h.cost_usd, false)}</td>
                   <td className="r muted">{compactUsd(h.entry_mc ?? 0)}</td>
                   <td className="r">{compactUsd(h.last_mc ?? 0)}</td>
-                  <td className="r">{pct((h.last_mc ?? 0) / c.target_mc, 0)}</td>
+                  <td className="r muted">{compactUsd(h.peak_mc ?? 0)}</td>
                   <td className="r"><b><Pol v={h.ret}>{pct(h.ret, 1, true)}</Pol></b></td>
+                  <td className="r">{h.trail_armed && h.trail_exit_px ? `$${price(h.trail_exit_px)} (−${pct(h.trail_pct ?? 0, 0)})` : <span className="muted">not armed</span>}</td>
                   <td className="r muted">{compactUsd(h.last_liquidity)}</td>
                   <td className="r muted">{fmtAge((now - h.opened_ms) / 60000)}</td>
                   <td>{metaIcons({ has_desc: true, website: h.website, twitter: h.twitter })}</td>
