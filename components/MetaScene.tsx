@@ -11,7 +11,7 @@ import type { MetaInfo, MetaRadarItem } from "@/lib/types";
 // Strategy 12 "Metadata Movers": a market-cap elevator. Height = market cap (log, $10k floor to $10M);
 // x = how new the pair is (log hours, newest on the left); depth = chain (Solana behind, Base in front).
 // Two glowing floors: the $1M entry ceiling (buy below it) and the $3M line where the trailing stop tightens. Each coin carries three
-// small beads for its metadata (description, website, X): all three lit = eligible. Held coins are gold,
+// small beads for its metadata (description, website, X): one lit is enough, more ranks higher. Held coins are gold,
 // with a beam from their entry market cap to now and a ring at the price where the trail would sell.
 
 const X_HALF = 8;

@@ -61,7 +61,7 @@ function buildSlides(perf: Performance): Slide[] {
     : [];
   const meta: Slide[] = perf.strategies?.metasniper?.sniper
     ? [{ key: "metasniper", n: 12, name: "Metadata Movers",
-        blurb: "new Solana/Base memecoins with description + website + X · buy under $1M market cap · sell seconds after the peak" }]
+        blurb: "new Solana/Base memecoins with a description, website or X link · buy under $1M market cap · sell seconds after the peak" }]
     : [];
   return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta];
 }
@@ -392,7 +392,7 @@ function MetaPanels({ p, m, now }: { p: Performance; m: MetaInfo; now: number })
       return acc;
     }, {}),
   ).sort((a, b) => b[1] - a[1]);
-  const near = m.radar.filter((r) => r.status === "rejected" && r.score >= 1 && r.mc > 0).slice(0, 10);
+  const near = m.radar.filter((r) => r.status === "rejected" && r.score > 0 && r.mc > 0).slice(0, 10);
   const metaIcons = (r: { has_desc?: boolean; website?: string; twitter?: string }) => (
     <span className="muted">
       {r.has_desc ? "📝" : "·"}{" "}
@@ -405,10 +405,10 @@ function MetaPanels({ p, m, now }: { p: Performance; m: MetaInfo; now: number })
       <section className="panel">
         <h2>Strategy 12 <span className="panel__hint">{p.status.decider} · paper · own {usd(c.start_balance, false)}</span></h2>
         <p className="strategy__what">
-          New memecoins whose teams have already paid to show a description, a website and an X account (DexScreener&apos;s
+          New memecoins whose teams have already put up a description, a website or an X account (DexScreener&apos;s
           token profile / Enhanced Token Info, which aggregators and the Coinbase app&apos;s token pages pick up) look legitimate
           and get seen early. Every minute the bot pulls the newest token profiles, community takeovers and boosts on{" "}
-          {(c.chains ?? [c.chain]).join(" and ")}, and buys every coin that has all three pieces of metadata, a market cap between{" "}
+          {(c.chains ?? [c.chain]).join(" and ")}, and buys every coin that has at least one of them (more metadata goes first), a market cap between{" "}
           {compactUsd(c.min_mc)} and {compactUsd(c.max_entry_mc)}, a pair younger than {c.max_age_h} hours, a pool of at least{" "}
           {compactUsd(c.min_liquidity)} and some trading in the last hour - {pct(c.position_frac, 0)} of equity each (never more than{" "}
           {pct(c.max_liq_frac, 0)} of the pool), up to {c.max_open} at once. There is no fixed target: held coins are re-priced every{" "}
@@ -453,7 +453,7 @@ function MetaPanels({ p, m, now }: { p: Performance; m: MetaInfo; now: number })
       <section className="panel">
         <h2>Metadata Movers holdings <span className="panel__hint">{m.holdings.length} of {c.max_open} slots · sells seconds after the peak</span></h2>
         {m.holdings.length === 0 ? (
-          <p className="empty">No open positions. Cash waits for a new coin with description + website + X under {compactUsd(c.max_entry_mc)}.</p>
+          <p className="empty">No open positions. Cash waits for a new coin with a description, website or X link under {compactUsd(c.max_entry_mc)}.</p>
         ) : (
           <table>
             <thead><tr><th>Token</th><th>Chain</th><th className="r">Cost</th><th className="r">Entry mc</th><th className="r">Mc now</th><th className="r">Peak mc</th><th className="r">Return</th><th className="r">Sells below</th><th className="r">Pool</th><th className="r">Held</th><th>Links</th></tr></thead>
@@ -481,7 +481,7 @@ function MetaPanels({ p, m, now }: { p: Performance; m: MetaInfo; now: number })
       <section className="panel">
         <h2>Radar <span className="panel__hint">targets, held and cooling-down coins right now · 📝 description · 🌐 website · 𝕏 account</span></h2>
         {live.length === 0 ? (
-          <p className="empty">Nothing with full metadata under {compactUsd(c.max_entry_mc)} this minute. The bot waits.</p>
+          <p className="empty">No coin with metadata under {compactUsd(c.max_entry_mc)} this minute. The bot waits.</p>
         ) : (
           <table>
             <thead><tr><th>Token</th><th>Chain</th><th>Status</th><th className="r">Market cap</th><th className="r">Age</th><th className="r">Pool</th><th className="r">1h</th><th>Metadata</th></tr></thead>
@@ -502,7 +502,7 @@ function MetaPanels({ p, m, now }: { p: Performance; m: MetaInfo; now: number })
           </table>
         )}
         {near.length > 0 && (
-          <p className="empty">Full metadata but filtered out: {near.map((r) => `$${r.symbol} ${compactUsd(r.mc)} (${r.why})`).join(" · ")}</p>
+          <p className="empty">Has metadata but filtered out: {near.map((r) => `$${r.symbol} ${compactUsd(r.mc)} (${r.why})`).join(" · ")}</p>
         )}
       </section>
     </>
@@ -810,7 +810,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             {isSniper
               ? "paper trading · Solana DEX memecoins · DexScreener radar"
               : isKalshi ? "paper trading · Kalshi prediction markets · public order books + trade tape"
-              : isMeta ? "paper trading · Solana + Base memecoins · DexScreener profiles (description + website + X)"
+              : isMeta ? "paper trading · Solana + Base memecoins · DexScreener profiles (description, website or X)"
               : isIdea ? `paper trading · idea lab · ${idea?.venue ?? "hyperliquid"}`
               : `paper trading · Hyperliquid perps · decisions by ${p.status.decider ?? (p.status.jev === "jev" ? "Jev" : "mock Jev")}`}
           </span>
