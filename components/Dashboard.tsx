@@ -43,7 +43,7 @@ type Slide = { key: SlideKey; n: number; name: string; blurb: string };
 
 const BASE_SLIDES: Slide[] = [
   { key: "trend", n: 1, name: "Trend ensemble", blurb: "Hyperliquid perps · daily trend · long only" },
-  { key: "sniper", n: 2, name: "Memecoin sniper v2", blurb: "Solana DEX pairs · deep pools only · 10-second stops · v1 archived (−60%)" },
+  { key: "sniper", n: 2, name: "Memecoin sniper v3", blurb: "Solana DEX pairs · deep pools only · skips coins already +100% in the hour · fresh $10k (v2 −39%, v1 −60% archived)" },
 ];
 
 /** Strategy 1 and 2, then one slide per idea-lab book (each idea trades its own $10k on paper). */
@@ -56,12 +56,12 @@ function buildSlides(perf: Performance): Slide[] {
     })
     .sort((a, b) => a.n - b.n);
   const kalshi: Slide[] = perf.strategies?.kalshi?.kalshi
-    ? [{ key: "kalshi", n: 7, name: "Kalshi in-and-out scalper",
-        blurb: "prediction markets · rest inside the spread, flip within seconds · naive buy-then-sell tracked as a control" }]
+    ? [{ key: "kalshi", n: 7, name: "Kalshi in-and-out scalper v2",
+        blurb: "prediction markets · only 3c+ spreads, step 1c inside, 5c stop · fresh $10k (v1 −40% archived) · naive buy-then-sell tracked as a control" }]
     : [];
   const meta: Slide[] = perf.strategies?.metasniper?.sniper
-    ? [{ key: "metasniper", n: 12, name: "Metadata Movers",
-        blurb: "new Solana/Base memecoins with a description, website or X link · buy under $1M market cap · sell seconds after the peak" }]
+    ? [{ key: "metasniper", n: 12, name: "Metadata Movers v4",
+        blurb: "Solana/Base memecoins with a description, website or X link · 30 min+ old, $60k-$1M market cap · sell seconds after the peak · fresh $10k (v1-v3 −47% archived)" }]
     : [];
   return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta];
 }
@@ -883,6 +883,14 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               <span><i className="swatch swatch--loss" /> drift after it, down</span>
               <span><i className="swatch swatch--held" /> days held</span>
               <span className="legend__note">one lane per altcoin · depth: last 120 days, newest in front · line: each coin&apos;s move after stripping out Bitcoin, in sigmas · spires: jumps above the {p.scene.threshold}-sigma plane, arcs: the next {p.scene.hold_days} days · front row: today · drag to orbit, hover a spire</span>
+            </div>
+          ) : isIdea && p.scene?.kind === "echo" ? (
+            <div className="legend" aria-label="Legend">
+              <span><i className="swatch swatch--carry-high" /> market 4h move up</span>
+              <span><i className="swatch swatch--loss" /> market 4h move down</span>
+              <span><i className="swatch swatch--held" /> echo trade (arc from the bar 24h earlier)</span>
+              <span><i className="swatch swatch--gain" /> trade won</span>
+              <span className="legend__note">one row per UTC day (last 60 days, newest in front) · six columns: the 4h bars at 00-20 UTC · the bar behind each column is the same slot 24h earlier, the one leaving the &quot;24h change&quot; · when it was a {p.scene.thr}-sigma move the book trades against it for 4h at {p.scene.lev ?? 3}x · front ring: the live reading · drag to orbit, hover a column</span>
             </div>
           ) : isIdea && p.scene?.kind === "spotlight" ? (
             <div className="legend" aria-label="Legend">
