@@ -884,6 +884,14 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               <span><i className="swatch swatch--held" /> days held</span>
               <span className="legend__note">one lane per altcoin · depth: last 120 days, newest in front · line: each coin&apos;s move after stripping out Bitcoin, in sigmas · spires: jumps above the {p.scene.threshold}-sigma plane, arcs: the next {p.scene.hold_days} days · front row: today · drag to orbit, hover a spire</span>
             </div>
+          ) : isIdea && p.scene?.kind === "spotlight" ? (
+            <div className="legend" aria-label="Legend">
+              <span><i className="swatch swatch--carry-high" /> volume far above normal</span>
+              <span><i className="swatch swatch--gain" /> move vs BTC after a spotlight, up</span>
+              <span><i className="swatch swatch--loss" /> down</span>
+              <span><i className="swatch swatch--held" /> days held</span>
+              <span className="legend__note">one row per altcoin · depth: last 90 days, newest in front · column height: dollar volume vs its 30-day normal (log scale) · searchlights: top-20% coins above the {p.scene.threshold}x plane, arcs: the next {p.scene.hold_days} days vs Bitcoin · front row: today · drag to orbit, hover a beam</span>
+            </div>
           ) : isIdea && p.scene?.kind === "rider" ? (
             <div className="legend" aria-label="Legend">
               <span><i className="swatch swatch--carry-high" /> rising (7-day momentum)</span>

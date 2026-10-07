@@ -257,7 +257,27 @@ export type JumpScene = {
   live_btc_hedge?: number | null;
 };
 
-export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene;
+export type SpotlightEvent = { i: number; j: number; av: number; day_ret_pct: number; drift_pct: number[] };
+
+export type SpotlightScene = {
+  kind: "spotlight";
+  title?: string;
+  x: string[];                 // altcoins (most spotlight days in the last year first)
+  z: string[];                 // days, oldest first
+  y: (number | null)[][];      // [day][coin] log2(dollar volume / prior-30-day average)
+  held: number[][];            // [day][coin] 1 = held over the next day
+  events: SpotlightEvent[];    // spotlight days and the coin's move vs BTC over the hold
+  y_label?: string;
+  threshold: number;           // abnormal-volume multiple (2 = twice normal)
+  hold_days: number;
+  avg_drift_pct?: number | null;
+  hit_rate_pct?: number | null;
+  live?: Record<string, { held: boolean; av?: number | null; days_left?: number; [k: string]: number | string | boolean | null | undefined }>;
+  live_key?: string;
+  live_btc_hedge?: number | null;
+};
+
+export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene;
 
 export type IdeaInfo = {
   slug: string;
