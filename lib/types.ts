@@ -277,7 +277,79 @@ export type SpotlightScene = {
   live_btc_hedge?: number | null;
 };
 
-export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene;
+export type EchoBar = { t: number; m: number | null; z: number | null; side: number; pnl: number | null };
+
+export type EchoScene = {
+  kind: "echo";
+  title?: string;
+  bars: EchoBar[];             // last 60 days of 4h bars, oldest first (t = bar open, ms)
+  thr: number;                 // |z| entry threshold
+  lag_bars: number;            // 6 = the bar 24h earlier, rolling out of the 24h window
+  lev?: number;
+  y_label?: string;
+  hit_rate_pct?: number | null;
+  avg_event_net_pct?: number | null;
+  events_total?: number;
+  live?: { z: number | null; side: number; bar: number | null; z_hist?: [number, number | null, number][] };
+};
+
+export type CountdownEvent = { i: number; date: string; path: number[]; future: boolean; pre7_pct: number | null };
+
+export type CountdownScene = {
+  kind: "countdown";
+  title?: string;
+  x: string[];                 // coins with scheduled unlocks (most unlocks first)
+  events: CountdownEvent[];    // path = cumulative coin-minus-beta*BTC % from T-30, one point per day (T-30..T+6)
+  pre_days: number;            // days shorted before each unlock (7)
+  upcoming?: { coin: string; date: string; days_to?: number }[];
+  avg_path_pct?: number[] | null;   // all-event mean cumulative path T-30..T+14
+  avg_pre7_pct?: number | null;
+  hit_rate_pct?: number | null;
+  y_label?: string;
+  live_short?: Record<string, string>;   // coin -> unlock date currently shorted
+  live_btc_hedge?: number | null;
+};
+
+export type LadderCoin = {
+  coin: string;
+  held: boolean;
+  price: number;
+  entry_level?: number | null;   // flat coins: the bait (EMA band - 1.9%)
+  avg?: number | null;           // held: average entry
+  tp?: number | null;            // held: average x (1 + markup)
+  next?: number | null;          // held: next rung (last fill - step)
+  fills: number[];               // held: every fill price, first = top rung
+  worst_pct?: number | null;
+  age_h?: number | null;
+  usd?: number;
+};
+
+export type LadderScene = {
+  kind: "ladder";
+  title?: string;
+  step_pct: number;
+  markup_pct: number;
+  entry_dist_pct: number;
+  max_pos: number;
+  ddf: number;
+  weeks: string[];               // backtest weeks (4h bars Jul 2024 - Oct 2026)
+  equity_pct: number[];          // the rule, after taker costs + funding
+  placebo_pct: number[];         // same ladder, random entries (median of 20)
+  hold_pct: number[];            // equal-weight buy-and-hold of the 22 perps
+  cycles: number;
+  win_rate_pct: number;
+  avg_fills: number;
+  avg_hold_h: number;
+  fills_hist: Record<string, number>;   // closed cycles by rungs filled (1..6)
+  coins: LadderCoin[];
+  live?: {
+    cycles: number; wins: number; realised: number; gross_x?: number | null; deepest_rung?: number | null;
+    max_gross_usd?: number; shadow_equity?: number | null; shadow_cycles?: number;
+    recent?: { coin: string; pnl: number; fills: number; hours: number; worst_pct: number }[];
+  };
+};
+
+export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene | EchoScene | CountdownScene | LadderScene;
 
 export type IdeaInfo = {
   slug: string;
