@@ -363,7 +363,22 @@ export type OrbitScene = {
   leverage?: number;
 };
 
-export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene | EchoScene | CountdownScene | LadderScene | OrbitScene;
+export type QuadrantCoin = { c: string; slow: number; fast: number; state: number; w: number };
+
+export type QuadrantScene = {
+  kind: "quadrants";
+  title?: string;
+  slow_days: number;              // slow trend window (days)
+  fast_days: number;              // fast trend window (days)
+  leverage?: number;
+  asof?: string;
+  tilt: { correction: number; rebound: number };  // position taken in each turning state (-1..1)
+  coins: QuadrantCoin[];          // state 1 bull, 2 bear, 3 correction, 4 rebound; w = book weight
+  mix_180d?: number[][];          // per day, oldest first: [bull, bear, correction, rebound] coin counts
+  live_day?: number | null;
+};
+
+export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene | EchoScene | CountdownScene | LadderScene | OrbitScene | QuadrantScene;
 
 export type IdeaInfo = {
   slug: string;
