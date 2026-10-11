@@ -15,6 +15,7 @@ const SpotlightScene = dynamic(() => import("./SpotlightScene"), { ssr: false })
 const EchoScene = dynamic(() => import("./EchoScene"), { ssr: false });
 const CountdownScene = dynamic(() => import("./CountdownScene"), { ssr: false });
 const LadderScene = dynamic(() => import("./LadderScene"), { ssr: false });
+const OrbitScene = dynamic(() => import("./OrbitScene"), { ssr: false });
 
 // Generic 3D view for idea-lab strategies. kind "terrain": a landscape of bars,
 // x = category (coin), z = time (oldest at the back, newest at the front), height = value.
@@ -224,6 +225,7 @@ export default function IdeaScene({ scene, active = true }: { scene: AnyScene | 
   if (scene && scene.kind === "echo") return <EchoScene scene={scene} active={active} />;
   if (scene && scene.kind === "countdown") return <CountdownScene scene={scene} active={active} />;
   if (scene && scene.kind === "ladder") return <LadderScene scene={scene} active={active} />;
+  if (scene && scene.kind === "orbits") return <OrbitScene scene={scene} active={active} />;
   return <TerrainView scene={scene && scene.kind === "terrain" ? scene : null} active={active} />;
 }
 

@@ -349,7 +349,21 @@ export type LadderScene = {
   };
 };
 
-export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene | EchoScene | CountdownScene | LadderScene;
+export type OrbitCoin = { s: number; b: number | null; side: number };
+
+export type OrbitScene = {
+  kind: "orbits";
+  title?: string;
+  lookback_days: number;          // residual window (days)
+  k: number;                      // coins long / short
+  weeks: { t: string; coins: Record<string, OrbitCoin> }[];   // last 16 Monday rebalances, oldest first
+  next_week_resid_pct: Record<string, Record<string, number>>; // week -> coin -> residual move over that week (%)
+  live?: Record<string, OrbitCoin>;
+  live_decided?: number | null;   // day number (UTC) of the live book's Monday
+  leverage?: number;
+};
+
+export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene | EchoScene | CountdownScene | LadderScene | OrbitScene;
 
 export type IdeaInfo = {
   slug: string;
