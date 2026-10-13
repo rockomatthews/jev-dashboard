@@ -13,13 +13,14 @@ import * as THREE from "three";
 // Buys the gate refused stop at the ring they failed and drop away as red sparks.
 
 export type CopyCandidate = {
+  key?: string; sol?: string | null; evm?: string | null; last_tx?: Record<string, number>;
   handle: string | null; name?: string | null; wallet: string; leader: boolean; source?: string | null;
   on_board?: boolean; followers?: number | null; pnl24h_usd?: number | null; trades?: number | null;
   observed_days?: number; buys?: number; sells?: number; closed_trades?: number; win_rate?: number | null;
   pnl_30d_usd?: number | null; pnl_7d_usd?: number | null; avg_hold_minutes?: number | null;
 };
 export type CopyEvent = {
-  ts: number; handle: string; wallet: string; mint: string; side: "BUY" | "SELL"; usd: number;
+  ts: number; handle: string; key?: string | null; chain?: string; wallet: string; mint: string; side: "BUY" | "SELL"; usd: number;
   status: string; why: string; symbol?: string | null; confidence?: number | null;
 };
 export type CopyBlock = {
@@ -91,6 +92,7 @@ function Trader({ c, pos, hovered, onHover }: { c: CopyCandidate; pos: THREE.Vec
         <Html position={[0, size + 2.4, 0]} center style={{ pointerEvents: "none" }}>
           <div className="tooltip">
             <div className="tooltip__time">@{c.handle} · {c.leader ? "leader (copied)" : "candidate (tape only)"}</div>
+            <div className="tooltip__row"><span>Chains active</span><b>{Object.keys(c.last_tx ?? {}).join(" · ") || "—"}</b></div>
             <div className="tooltip__row"><span>Source</span><b>{c.source ?? "—"}{c.on_board ? " · on board now" : ""}</b></div>
             <div className="tooltip__row"><span>fomo 24h PnL · followers</span><b>{fmtUsd(c.pnl24h_usd)} · {(c.followers ?? 0).toLocaleString()}</b></div>
             <div className="tooltip__row"><span>Seen on-chain</span><b>{c.buys ?? 0} buys · {c.sells ?? 0} sells · {c.observed_days ?? 0}d</b></div>
@@ -216,10 +218,11 @@ export default function CopyScene({ info, active = true }: { info: CopyInfo; act
   const cands = info.copy?.candidates ?? [];
   const seats = useMemo(() => {
     const out: Record<string, THREE.Vector3> = {};
-    cands.forEach((c, i) => { out[c.wallet] = seat(i, cands.length); });
+    cands.forEach((c, i) => { out[c.key ?? c.handle ?? c.wallet] = seat(i, cands.length); });
     return out;
   }, [cands]);
-  const buys = (info.copy?.events ?? []).filter((e) => e.side === "BUY" && seats[e.wallet]).slice(0, 30);
+  const seatOf = (e: CopyEvent) => seats[e.key ?? ""] ?? seats[e.handle] ?? seats[e.wallet];
+  const buys = (info.copy?.events ?? []).filter((e) => e.side === "BUY" && seatOf(e)).slice(0, 30);
   const sells = (info.copy?.events ?? []).filter((e) => e.status === "MIRROR").length;
   return (
     <Canvas
@@ -242,9 +245,9 @@ export default function CopyScene({ info, active = true }: { info: CopyInfo; act
         </mesh>
         <Gate counts={info.copy?.counts ?? {}} />
         {cands.map((c) => (
-          <Trader key={c.wallet} c={c} pos={seats[c.wallet]} hovered={hover === c.wallet} onHover={setHover} />
+          <Trader key={c.key ?? c.wallet} c={c} pos={seats[c.key ?? c.handle ?? c.wallet]} hovered={hover === c.wallet} onHover={setHover} />
         ))}
-        {buys.map((e, k) => <Comet key={`${e.ts}-${e.mint}-${k}`} from={seats[e.wallet]} ev={e} k={k} />)}
+        {buys.map((e, k) => <Comet key={`${e.ts}-${e.mint}-${k}`} from={seatOf(e)} ev={e} k={k} />)}
         {info.holdings.map((h, i) => <Planet key={h.key} h={h} i={i} n={info.holdings.length} />)}
         {cands.length === 0 && (
           <Html position={[0, 2, 0]} center style={{ pointerEvents: "none" }}>

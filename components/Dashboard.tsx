@@ -72,7 +72,7 @@ function buildSlides(perf: Performance): Slide[] {
   const copyPerf = (perf.strategies as Record<string, Performance | undefined> | undefined)?.copydesk;
   const copy: Slide[] = copyPerf?.sniper
     ? [{ key: "copydesk", n: 25, name: "Copy Desk",
-        blurb: "fomo's top traders' Solana wallets watched on-chain · every buy through Rugcheck's facts, then Grok's COPY/SKIP · flat $500 · mirror the leader's exit, −50% stop, half off at +100%" }]
+        blurb: "fomo's top traders watched on-chain on Solana, Robinhood Chain and Base · every buy through Rugcheck/GoPlus facts, then Grok's COPY/SKIP · flat $500 · mirror the leader's exit, −50% stop, half off at +100%" }]
     : [];
   return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...copy];
 }
@@ -462,12 +462,16 @@ function CopyDeskPanels({ p, m, c, now }: { p: Performance; m: MetaInfo; c: Copy
         <h2>Strategy 25 <span className="panel__hint">Copy Desk · paper · own {usd(m.config.start_balance, false)} · runs by itself</span></h2>
         <p className="strategy__what">
           The copy-trading playbook (&quot;code fetches, Grok judges, copyfomo executes&quot;) with no human step. Every 30
-          minutes the desk reads fomo&apos;s public top-5 board, which lists each trader&apos;s Solana wallet, and keeps every
-          wallet it has seen as a candidate. Every 20 seconds it reads the newest Solana transactions of the leaders and up to
-          15 other candidates, the most active on Solana first. A transaction that adds one token while SOL or a stablecoin leaves the wallet counts as a buy. A leader
+          minutes the desk reads fomo&apos;s public top-5 board, which lists each trader&apos;s Solana and EVM wallets, and
+          keeps every trader it has seen as a candidate. Every 20 seconds it reads the leaders&apos; newest trades on{" "}
+          {(c as unknown as { chains_live?: string[] }).chains_live?.join(", ") ?? "Solana, Robinhood Chain and Base"}. The
+          other candidates are read every 2 minutes. On Solana, a transaction that adds one token while SOL or a stablecoin
+          leaves the wallet counts as a buy. On EVM chains, a token arriving in the wallet counts as a buy, valued by the
+          WETH/USDG/USDC leg or DexScreener&apos;s price. A leader
           buy of at least {usd(r.min_leader_usd, false)}, seen within {Math.round(r.max_signal_age_s / 60)} minutes, goes to
-          the gate. The gate first checks Rugcheck&apos;s facts: mint/freeze authority, danger flags, risk score, top-10 holders
-          with pools excluded, LP lock, and insiders. It then asks Grok for COPY or SKIP, and only a COPY with confidence of at least{" "}
+          the gate. The gate first checks the hard facts. On Solana that is Rugcheck: mint/freeze authority, danger flags, risk score,
+          top-10 holders with pools excluded, LP lock, and insiders. On EVM it is GoPlus: honeypot, taxes over 10%, owner
+          powers, minting with a live owner, top-10 holders, and LP held by people. It then asks Grok for COPY or SKIP, and only a COPY with confidence of at least{" "}
           {Math.round(r.min_confidence * 100)}% books a flat {usd(g?.ticket_usd ?? 500, false)} ticket. When the leader sells, the
           desk sells the same share, and all of it once he sells 90% or more. There is also a {pct(g?.rules.stop_loss ?? -0.5, 0, true)}{" "}
           stop, half comes off at {pct(g?.rules.take_half_at ?? 1, 0, true)}, and the rest trails the peak. Once a week, after 3
@@ -503,8 +507,9 @@ function CopyDeskPanels({ p, m, c, now }: { p: Performance; m: MetaInfo; c: Copy
             {c.candidates.map((x) => (
               <tr key={x.wallet}>
                 <td>{x.leader ? <b className="pol pol--gain">★ @{x.handle}</b> : <>@{x.handle}</>}{" "}
-                  <a className="muted" href={`https://solscan.io/account/${x.wallet}`} target="_blank" rel="noreferrer">{x.wallet.slice(0, 4)}…</a></td>
-                <td className="muted">{x.source ?? "—"}{x.on_board ? " · now" : ""}</td>
+                  {x.sol && <a className="muted" href={`https://solscan.io/account/${x.sol}`} target="_blank" rel="noreferrer">sol</a>}{" "}
+                  {x.evm && <a className="muted" href={`https://robinhoodchain.blockscout.com/address/${x.evm}`} target="_blank" rel="noreferrer">evm</a>}</td>
+                <td className="muted">{x.source ?? "—"}{x.on_board ? " · now" : ""}{x.last_tx && Object.keys(x.last_tx).length ? ` · ${Object.keys(x.last_tx).join("/")}` : ""}</td>
                 <td className="r">{x.pnl24h_usd === null || x.pnl24h_usd === undefined ? "—" : compactUsd(x.pnl24h_usd)}</td>
                 <td className="r">{(x.followers ?? 0).toLocaleString()}</td>
                 <td className="r">{x.buys ?? 0}b / {x.sells ?? 0}s</td>
@@ -531,7 +536,7 @@ function CopyDeskPanels({ p, m, c, now }: { p: Performance; m: MetaInfo; c: Copy
               <tr key={`${e.ts}-${e.mint}-${i}`}>
                 <td className="muted">{ago(e.ts, now)}</td>
                 <td>@{e.handle}</td>
-                <td><a href={`https://dexscreener.com/solana/${e.mint}`} target="_blank" rel="noreferrer">{e.symbol ? `$${e.symbol}` : `${e.mint.slice(0, 5)}…`}</a> <span className="muted">{e.side.toLowerCase()}</span></td>
+                <td><span className="muted">{e.chain ?? "solana"}</span>{" "}<a href={`https://dexscreener.com/${e.chain ?? "solana"}/${e.mint}`} target="_blank" rel="noreferrer">{e.symbol ? `$${e.symbol}` : `${e.mint.slice(0, 5)}…`}</a> <span className="muted">{e.side.toLowerCase()}</span></td>
                 <td className="r">{usd(e.usd, false)}</td>
                 <td>{e.status === "COPY" || e.status === "MIRROR" ? <b className="pol pol--gain">{COPY_STATUS[e.status]}</b> : <span className="muted">{COPY_STATUS[e.status] ?? e.status}</span>}</td>
                 <td className="muted">{e.why}{e.confidence !== null && e.confidence !== undefined ? ` (${Math.round(e.confidence * 100)}%)` : ""}</td>
@@ -981,7 +986,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             {isSniper
               ? "paper trading · Solana DEX memecoins · DexScreener radar"
               : isKalshi ? "paper trading · Kalshi prediction markets · public order books + trade tape"
-              : isCopy ? "paper trading · copy trading · fomo's top Solana wallets → Rugcheck facts → Grok verdict"
+              : isCopy ? "paper trading · copy trading · fomo's top wallets on Solana, Robinhood Chain and Base → hard facts → Grok verdict"
               : isRug ? "paper trading · Solana memecoins · DexScreener profiles behind Rugcheck's fact checks"
               : isMeta ? "paper trading · Solana + Base memecoins · DexScreener profiles (description, website or X)"
               : isIdea ? `paper trading · idea lab · ${idea?.venue ?? "hyperliquid"}`
