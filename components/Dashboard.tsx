@@ -464,7 +464,7 @@ function CopyDeskPanels({ p, m, c, now }: { p: Performance; m: MetaInfo; c: Copy
           The copy-trading playbook (&quot;code fetches, Grok judges, copyfomo executes&quot;) with no human step. Every 30
           minutes the desk reads fomo&apos;s public top-5 board, which lists each trader&apos;s Solana wallet, and keeps every
           wallet it has seen as a candidate. Every 20 seconds it reads the newest Solana transactions of the leaders and up to
-          10 candidates. A transaction that adds one token while SOL or a stablecoin leaves the wallet counts as a buy. A leader
+          15 other candidates, the most active on Solana first. A transaction that adds one token while SOL or a stablecoin leaves the wallet counts as a buy. A leader
           buy of at least {usd(r.min_leader_usd, false)}, seen within {Math.round(r.max_signal_age_s / 60)} minutes, goes to
           the gate. The gate first checks Rugcheck&apos;s facts: mint/freeze authority, danger flags, risk score, top-10 holders
           with pools excluded, LP lock, and insiders. It then asks Grok for COPY or SKIP, and only a COPY with confidence of at least{" "}
