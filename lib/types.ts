@@ -127,8 +127,17 @@ export type MetaHolding = SniperHolding & {
   twitter?: string;
 };
 
+export type RugGate = {
+  counts: Record<string, number>;   // "passed" and one key per kill reason (authority_open, top10, ...)
+  ticket_usd: number;
+  max_open: number;
+  rules: { max_risk_score: number; max_top10_pct: number; min_lp_locked_pct: number; max_insider_nets: number;
+           stop_loss: number; take_half_at: number; max_impact: number };
+};
+
 export type MetaInfo = {
-  mode: "meta";
+  mode: "meta" | "rug";
+  gate?: RugGate;                   // Strategy 23 only
   radar: MetaRadarItem[];
   scanned_total: number;
   last_scan_ms: number;
@@ -470,7 +479,7 @@ export type Performance = {
   sniper?: SniperInfo;
   kalshi?: KalshiInfo;
   ideas?: { date: string; name: string; source: string; rule: string; status: string; verdict: string; sharpe?: number | null }[];
-  strategies?: { sniper?: Performance; kalshi?: Performance; metasniper?: Performance } & { [key: `idea:${string}`]: Performance | undefined };
+  strategies?: { sniper?: Performance; kalshi?: Performance; metasniper?: Performance; rugsniper?: Performance } & { [key: `idea:${string}`]: Performance | undefined };
   idea?: IdeaInfo;
   scene?: IdeaScene | null;
   status: {

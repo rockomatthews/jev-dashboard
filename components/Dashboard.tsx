@@ -63,7 +63,11 @@ function buildSlides(perf: Performance): Slide[] {
     ? [{ key: "metasniper", n: 12, name: "Metadata Movers v4",
         blurb: "Solana/Base memecoins with a description, website or X link · 30 min+ old, $60k-$1M market cap · sell seconds after the peak · fresh $10k (v1-v3 −47% archived)" }]
     : [];
-  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta];
+  const rug: Slide[] = perf.strategies?.rugsniper?.sniper
+    ? [{ key: "rugsniper", n: 23, name: "Rugcheck Gate",
+        blurb: "Strategy 12's Solana memecoins, bought only if Rugcheck's facts pass · no open mint/freeze, top-10 ≤ 30%, LP ≥ 90% locked · flat $500 · −50% stop, half off at +100%" }]
+    : [];
+  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug];
 }
 
 function Pol({ v, children }: { v: number; children: React.ReactNode }) {
@@ -379,6 +383,62 @@ function SniperPanels({ p, sn, demo, now }: { p: Performance; sn: SniperInfo; de
 // =============================================================================================
 // Strategy 12 panels (Metadata Movers): rules, radar with metadata, holdings with market-cap progress
 // =============================================================================================
+const GATE_LABEL: Record<string, string> = {
+  passed: "passed → bought", no_report: "no Rugcheck report", authority_open: "mint / freeze authority open",
+  danger: "danger flag", risk_score: "risk score > limit", top10: "top-10 holders too big",
+  lp_unlocked: "LP not locked", insiders: "insider network",
+};
+
+function RugGatePanel({ p, m, g }: { p: Performance; m: MetaInfo; g: NonNullable<MetaInfo["gate"]> }) {
+  const c = m.config;
+  const r = g.rules;
+  const total = Object.values(g.counts).reduce((a, b) => a + b, 0);
+  const rows = Object.entries(g.counts).sort((a, b) => (a[0] === "passed" ? -1 : b[0] === "passed" ? 1 : b[1] - a[1]));
+  return (
+    <section className="panel">
+      <h2>Strategy 23 <span className="panel__hint">Rugcheck Gate · paper · own {usd(c.start_balance, false)}</span></h2>
+      <p className="strategy__what">
+        From a copy-trading playbook built on one split: code fetches the facts, a model judges, a bot executes. This book
+        keeps the free, code-only part. It watches the same new Solana memecoins as Strategy 12 (a description, website or
+        X link, {compactUsd(c.min_mc)}-{compactUsd(c.max_entry_mc)} market cap, {fmtAge(30)}+ old, pool of at least{" "}
+        {compactUsd(c.min_liquidity)}). Before every buy it pulls the coin&apos;s Rugcheck report and kills the coin on the first
+        failed fact. Those facts are: a still-open mint or freeze authority, any danger-level flag, a risk score over{" "}
+        {r.max_risk_score}, top-10 holders over {r.max_top10_pct}% of supply (pool accounts excluded), LP under{" "}
+        {r.min_lp_locked_pct}% locked, or {r.max_insider_nets === 0 ? "any" : `more than ${r.max_insider_nets}`} insider
+        network. A coin with no report is skipped, never passed. Survivors get a flat {usd(g.ticket_usd, false)} ticket. The
+        bot holds {g.max_open} coins at most, never takes a ticket that would move the pool more than{" "}
+        {pct(r.max_impact, 0)}, and waits an hour between entries. Exits: a {pct(r.stop_loss, 0, true)} stop, then half
+        sold at {pct(r.take_half_at, 0, true)}, and the rest trails the peak like Strategy 12.
+      </p>
+      <div className="rules">
+        <span className="rule rule--loss">no open mint / freeze</span>
+        <span className="rule rule--loss">no danger flags</span>
+        <span className="rule">risk score ≤ {r.max_risk_score}</span>
+        <span className="rule">top-10 ≤ {r.max_top10_pct}%</span>
+        <span className="rule">LP locked ≥ {r.min_lp_locked_pct}%</span>
+        <span className="rule">flat {usd(g.ticket_usd, false)} · max {g.max_open}</span>
+        <span className="rule rule--loss">stop {pct(r.stop_loss, 0, true)}</span>
+        <span className="rule rule--gain">half off at {pct(r.take_half_at, 0, true)}</span>
+      </div>
+      <p className="empty">
+        Rugcheck keeps no point-in-time history, so there is no backtest; this paper book is the test. The live A/B test
+        is Strategy 12, which buys the same candidates without the gate. Not taken from the playbook: copying fomo
+        leaders (no public API), the Grok verdict, and any real-money execution.
+      </p>
+      <table>
+        <thead><tr><th>Gate verdict (since launch)</th><th className="r">Coins</th><th className="r">Share</th></tr></thead>
+        <tbody>
+          {rows.length === 0 && <tr><td colSpan={3} className="muted">no coin checked yet</td></tr>}
+          {rows.map(([k, v]) => (
+            <tr key={k}><td>{GATE_LABEL[k] ?? k}</td><td className="r">{v}</td><td className="r">{pct(total ? v / total : 0, 0)}</td></tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="muted">{p.status.decider}</p>
+    </section>
+  );
+}
+
 function MetaPanels({ p, m, now }: { p: Performance; m: MetaInfo; now: number }) {
   const c = m.config;
   const live = m.radar.filter((r) => r.status !== "rejected").slice(0, 20);
@@ -402,7 +462,8 @@ function MetaPanels({ p, m, now }: { p: Performance; m: MetaInfo; now: number })
   );
   return (
     <>
-      <section className="panel">
+      {m.mode === "rug" && m.gate && <RugGatePanel p={p} m={m} g={m.gate} />}
+      <section className="panel" style={m.mode === "rug" ? { display: "none" } : undefined}>
         <h2>Strategy 12 <span className="panel__hint">{p.status.decider} · paper · own {usd(c.start_balance, false)}</span></h2>
         <p className="strategy__what">
           New memecoins whose teams have already put up a description, a website or an X account (DexScreener&apos;s
@@ -755,13 +816,15 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const slideKey = SLIDES[slideIdx].key;
   const isSniper = slideKey === "sniper";
   const isKalshi = slideKey === "kalshi";
-  const isMeta = slideKey === "metasniper";
+  const isRug = slideKey === "rugsniper";
+  const isMeta = slideKey === "metasniper" || isRug;
   const metaPerf = data.perf.strategies?.metasniper;
+  const rugPerf = data.perf.strategies?.rugsniper;
   const kalshiPerf = data.perf.strategies?.kalshi;
   const ideaPerf = slideKey.startsWith("idea:") ? data.perf.strategies?.[slideKey as `idea:${string}`] : undefined;
   const idea = ideaPerf?.idea;
   const isIdea = !!(ideaPerf && idea);
-  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isMeta && metaPerf ? metaPerf
+  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isRug && rugPerf ? rugPerf : isMeta && metaPerf ? metaPerf
     : isIdea ? (ideaPerf as Performance) : data.perf;
   const meta = isMeta && p.sniper ? (p.sniper as unknown as MetaInfo) : undefined;
   const kal = isKalshi ? p.kalshi : undefined;
@@ -810,6 +873,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             {isSniper
               ? "paper trading · Solana DEX memecoins · DexScreener radar"
               : isKalshi ? "paper trading · Kalshi prediction markets · public order books + trade tape"
+              : isRug ? "paper trading · Solana memecoins · DexScreener profiles behind Rugcheck's fact checks"
               : isMeta ? "paper trading · Solana + Base memecoins · DexScreener profiles (description, website or X)"
               : isIdea ? `paper trading · idea lab · ${idea?.venue ?? "hyperliquid"}`
               : `paper trading · Hyperliquid perps · decisions by ${p.status.decider ?? (p.status.jev === "jev" ? "Jev" : "mock Jev")}`}
@@ -830,6 +894,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : s.key === "sniper" ? (sniperDemo ? null : sniperPerf.equity)
           : s.key === "kalshi" ? (kalshiPerf?.equity ?? null)
           : s.key === "metasniper" ? (metaPerf?.equity ?? null)
+          : s.key === "rugsniper" ? (rugPerf?.equity ?? null)
             : data.perf.strategies?.[s.key as `idea:${string}`]?.equity ?? null)} />
 
       <div key={slideKey} className={`slide slide--from-${dir}`}>
@@ -845,7 +910,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
 
         <section className="hero">
           <div>
-            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
+            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isRug ? "Strategy 23 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
             <div className="hero__equity">{usd(p.equity)}</div>
             <div className="hero__pnl">
               <Pol v={p.pnl}>{arrow(p.pnl)} {signedUsd(p.pnl)} ({pct(p.pnl_pct, 2, true)})</Pol>
@@ -929,6 +994,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
       <section className={`scene ${isSniper ? "scene--sniper" : isIdea || isKalshi || isMeta ? "scene--idea" : ""}`}
         aria-label={isSniper ? "3D cluster map of Solana pairs the sniper is tracking"
           : isKalshi ? "3D order-book towers for the Kalshi markets the scalper works"
+          : isRug ? "3D market-cap elevator of the Solana memecoins Rugcheck let through"
           : isMeta ? "3D market-cap elevator of new memecoins with metadata, Solana and Base"
           : isIdea ? `3D view for strategy ${idea?.n}: ${p.scene?.title ?? idea?.name}`
             : "3D view of the equity curve and per-coin P&L"}>
@@ -946,8 +1012,13 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           </div>
         )}
         {visited.metasniper && metaPerf?.sniper && (
-          <div className={`scene__layer ${isMeta ? "scene__layer--on" : ""}`} aria-hidden={!isMeta}>
-            <MetaScene info={metaPerf.sniper as unknown as MetaInfo} active={isMeta} />
+          <div className={`scene__layer ${isMeta && !isRug ? "scene__layer--on" : ""}`} aria-hidden={!(isMeta && !isRug)}>
+            <MetaScene info={metaPerf.sniper as unknown as MetaInfo} active={isMeta && !isRug} />
+          </div>
+        )}
+        {visited.rugsniper && rugPerf?.sniper && (
+          <div className={`scene__layer ${isRug ? "scene__layer--on" : ""}`} aria-hidden={!isRug}>
+            <MetaScene info={rugPerf.sniper as unknown as MetaInfo} active={isRug} />
           </div>
         )}
         {SLIDES.filter((s) => s.key.startsWith("idea:") && visited[s.key]).map((s) => (
@@ -1127,6 +1198,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             ? "Paper trading only — Kalshi orders are simulated against the public order books and trade tape with Kalshi's fee schedule; nothing is sent to Kalshi. Not investment advice."
             : isIdea
             ? `Paper trading only — idea-lab book with its own ${usd(p.start_balance, false)}. Both legs are simulated Hyperliquid market orders (perp 4.5 bp, spot 7 bp taker, plus spread and latency); funding is settled hourly at the exchange's rate. Not investment advice.`
+            : isRug
+            ? "Paper trading only — simulated Solana swaps priced from real DexScreener pool data with AMM price impact, DEX fee, priority fee and latency slippage. Rugcheck's report is a fact filter, not a guarantee: a coin that passes can still go to zero. Not investment advice."
             : isMeta
             ? "Paper trading only — simulated Solana/Base swaps priced from real DexScreener pool data with AMM price impact, DEX fee, gas/priority fee and latency slippage. Metadata is a visibility signal, not a safety check: most new memecoins still go to zero. Not investment advice."
             : isSniper
