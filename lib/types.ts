@@ -378,7 +378,20 @@ export type QuadrantScene = {
   live_day?: number | null;
 };
 
-export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene | EchoScene | CountdownScene | LadderScene | OrbitScene | QuadrantScene;
+export type PulseWeek = { d: string; r: number; w: number; px: number };
+
+export type PulseScene = {
+  kind: "pulse";
+  title?: string;
+  lookback_weeks: number;         // BTC return window that sets the weekly sign
+  leverage?: number;
+  asof?: string;
+  now?: { r: number; w: number }; // live 4-week return (%) and BTC weight (x equity)
+  weeks: PulseWeek[];             // last ~52 Mondays, oldest first: d = Monday, r = 4-week return %, w = weight
+  live_day?: number | null;
+};
+
+export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene | EchoScene | CountdownScene | LadderScene | OrbitScene | QuadrantScene | PulseScene;
 
 export type IdeaInfo = {
   slug: string;
