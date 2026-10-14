@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { demoSniperPerf } from "@/lib/demo-sniper";
 import BacktestLab, { SLIDE_TO_BACKTEST } from "./BacktestLab";
 import type { CopyBlock, CopyInfo } from "./CopyScene";
+import type { LotInfo } from "./LotScene";
 import { ago, arrow, num, pct, polarity, price, signedUsd, usd, when } from "@/lib/format";
 import type { IdeaInfo, KalshiInfo, MetaInfo, Performance, PerfResponse, RadarItem, SniperInfo } from "@/lib/types";
 
@@ -29,6 +30,7 @@ const MetaScene = dynamic(() => import("./MetaScene"), {
 });
 
 const CopyScene = dynamic(() => import("./CopyScene"), { ssr: false });
+const LotScene = dynamic(() => import("./LotScene"), { ssr: false });
 const IdeaScene = dynamic(() => import("./IdeaScene"), {
   ssr: false,
   loading: () => <div className="scene-loading">Raising the landscape…</div>,
@@ -74,7 +76,12 @@ function buildSlides(perf: Performance): Slide[] {
     ? [{ key: "copydesk", n: 25, name: "Copy Desk",
         blurb: "fomo's top traders watched on-chain on Solana, Robinhood Chain and Base · every buy through Rugcheck/GoPlus facts, then Grok's COPY/SKIP · flat $500 · mirror the leader's exit, −50% stop, half off at +100%" }]
     : [];
-  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...copy];
+  const lotPerf = (perf.strategies as Record<string, Performance | undefined> | undefined)?.lotladder;
+  const lot: Slide[] = (lotPerf as unknown as { lots?: unknown } | undefined)?.lots
+    ? [{ key: "lotladder", n: 26, name: "Lot Ladder",
+        blurb: "Rob's STRAFE HELM OKX lot engine · $50 taker lots, 6 per coin · maker exit at +$0.40 net (decays to $0.25) · never sells at a loss · bags marked at the bid" }]
+    : [];
+  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...copy, ...lot];
 }
 
 function Pol({ v, children }: { v: number; children: React.ReactNode }) {
@@ -581,6 +588,113 @@ function CopyDeskPanels({ p, m, c, now }: { p: Performance; m: MetaInfo; c: Copy
   );
 }
 
+// =============================================================================================
+// Strategy 26 panels (Lot Ladder): the rules, Rob's run #5 vs. our live book vs. the 7-day backtest, coins, lots
+// =============================================================================================
+function LotPanels({ p, L, now }: { p: Performance; L: LotInfo; now: number }) {
+  const s = L.summary;
+  const r5 = L.run5;
+  const bt = L.backtest;
+  const cfg = L.config as Record<string, number>;
+  const mins = (x: number | null | undefined) => (x === null || x === undefined ? "—" : `${Math.round(x / 60)} min`);
+  const coins = [...L.coins].sort((a, b) => b.lots.length - a.lots.length || b.net - a.net);
+  return (
+    <>
+      <section className="panel">
+        <h2>Strategy 26 <span className="panel__hint">Lot Ladder · Rob&apos;s STRAFE HELM OKX engine · paper · own {usd(p.start_balance, false)}</span></h2>
+        <p className="strategy__what">
+          This book runs the lot engine from Rob&apos;s OKX run sheet (paper run #5, 2026-10-13) on live OKX prices. Every
+          position is a fixed {usd(cfg.lot_usd, false)} lot bought with a taker order, at most one lot every{" "}
+          {cfg.entry_clock_s} s, up to {cfg.max_lots_per_coin} per coin, on {L.coins.length} coins. Each lot then rests a maker
+          sell priced to net +${Number(cfg.profit_per_lot).toFixed(2)} after both fees. The target slides to
+          +${Number(cfg.min_profit).toFixed(2)} over {cfg.decay_h} h. There is no stop and no time exit, and a lot is never
+          sold below its cost. Only crashes block new lots: −6% in 1 h, −12% in 4 h, −25% in a day. New lots also stop once
+          lots held cost {Math.round(Number(cfg.flow_frac) * 100)}% of equity. Never-loss turns every losing trade into a
+          held bag. A 100% win rate on closed lots is therefore built in, so the score that counts here is realized P&amp;L
+          plus the bags marked at the bid.
+        </p>
+        <div className="rules">
+          <span className="rule">{usd(cfg.lot_usd, false)} taker lots</span>
+          <span className="rule">max {cfg.max_lots_per_coin} / coin</span>
+          <span className="rule rule--gain">maker exit +${Number(cfg.profit_per_lot).toFixed(2)} → ${Number(cfg.min_profit).toFixed(2)}</span>
+          <span className="rule rule--loss">never sells at a loss</span>
+          <span className="rule">crash gates 1h −6% · 4h −12% · 1d −25%</span>
+          <span className="rule">flow limit {Math.round(Number(cfg.flow_frac) * 100)}% of equity</span>
+          <span className="rule">fees 0.35% taker / 0.20% maker</span>
+        </div>
+        {L.kill_reason && <p className="empty">⛔ {L.kill_reason}</p>}
+        {L.last_error && <p className="muted">last data error: {L.last_error}</p>}
+      </section>
+
+      <section className="panel">
+        <h2>Three views of the same engine <span className="panel__hint">realized vs. what the bags are worth</span></h2>
+        <table>
+          <thead><tr><th></th><th className="r">Rob&apos;s run #5</th><th className="r">This book (live)</th><th className="r">Backtest {bt ? `${bt.days} d` : ""}</th></tr></thead>
+          <tbody>
+            <tr><td>Capital</td><td className="r">{r5 ? usd(r5.capital, false) : "—"}</td><td className="r">{usd(p.start_balance, false)}</td><td className="r">{usd(p.start_balance, false)}</td></tr>
+            <tr><td>Time</td><td className="r">{r5 ? `${r5.hours} h` : "—"}</td><td className="r">since {when(p.curve.length ? p.curve[0][0] : p.updated_ms)}</td><td className="r">{bt ? `${bt.days} days · ${bt.coins} coins` : "running (first result within ~20 min)"}</td></tr>
+            <tr><td>Lots sold</td><td className="r">{r5?.lots_closed ?? "—"}</td><td className="r">{s.lots_closed}</td><td className="r">{bt?.lots_closed ?? "—"}</td></tr>
+            <tr><td>Realized</td><td className="r">{r5 ? <Pol v={r5.realized}>{signedUsd(r5.realized)}</Pol> : "—"}</td><td className="r"><Pol v={s.realized}>{signedUsd(s.realized)}</Pol></td><td className="r">{bt ? <Pol v={bt.realized}>{signedUsd(bt.realized)}</Pol> : "—"}</td></tr>
+            <tr><td>Net per lot sold</td><td className="r">{r5?.net_per_lot_median === null || !r5 ? "—" : `$${r5.net_per_lot_median.toFixed(3)} (median)`}</td><td className="r">{s.net_per_lot === null ? "—" : `$${s.net_per_lot.toFixed(3)}`}</td><td className="r">{bt?.net_per_lot == null ? "—" : `$${bt.net_per_lot.toFixed(3)}`}</td></tr>
+            <tr><td>Median hold</td><td className="r">{mins(r5?.hold_median_s)}</td><td className="r">{mins(s.hold_median_s)}</td><td className="r">{mins(bt?.hold_median_s)}</td></tr>
+            <tr><td>Bags held (cost)</td><td className="r">{r5 ? `${r5.held_lots} · ${usd(r5.held_cost, false)}` : "—"}</td><td className="r">{s.held_lots} · {usd(s.held_cost, false)}</td><td className="r">{bt ? `${bt.held_lots} · ${usd(bt.held_cost, false)}` : "—"}</td></tr>
+            <tr><td>Bags at the bid</td><td className="r">{r5 ? <Pol v={r5.held_pnl}>{signedUsd(r5.held_pnl)}</Pol> : "—"}</td><td className="r"><Pol v={s.held_pnl}>{signedUsd(s.held_pnl)}</Pol></td><td className="r">{bt ? <Pol v={bt.held_pnl}>{signedUsd(bt.held_pnl)}</Pol> : "—"}</td></tr>
+            <tr><td><b>Net (realized + bags)</b></td><td className="r">{r5 ? <b><Pol v={r5.net_after_bags}>{signedUsd(r5.net_after_bags)}</Pol></b> : "—"}</td>
+              <td className="r"><b><Pol v={s.realized + s.held_pnl}>{signedUsd(s.realized + s.held_pnl)}</Pol></b></td>
+              <td className="r">{bt ? <b><Pol v={bt.realized + bt.held_pnl}>{signedUsd(bt.realized + bt.held_pnl)}</Pol> · {pct(bt.return_pct, 2, true)} · max DD {pct(-bt.max_drawdown, 1)}</b> : "—"}</td></tr>
+          </tbody>
+        </table>
+        {bt && <p className="muted">Backtest method: {bt.method}.</p>}
+      </section>
+
+      <section className="panel">
+        <h2>Coins <span className="panel__hint">lots held, bags and what each coin has sold</span></h2>
+        <table>
+          <thead><tr><th>Coin</th><th className="r">Bid</th><th className="r">24h</th><th className="r">Lots</th><th className="r">Bags</th><th className="r">Sold</th><th className="r">Net sold</th><th>Gate</th></tr></thead>
+          <tbody>
+            {coins.map((c) => {
+              const bag = c.lots.reduce((a, l) => a + l.pnl, 0);
+              return (
+                <tr key={c.coin}>
+                  <td><b>{c.coin}</b></td>
+                  <td className="r">{c.bid === null ? "—" : price(c.bid)}</td>
+                  <td className="r">{c.chg24 === null ? "—" : <Pol v={c.chg24}>{pct(c.chg24, 1, true)}</Pol>}</td>
+                  <td className="r">{c.lots.length}/{cfg.max_lots_per_coin}</td>
+                  <td className="r">{c.lots.length ? <Pol v={bag}>{signedUsd(bag)}</Pol> : "—"}</td>
+                  <td className="r">{c.closed}</td>
+                  <td className="r">{c.closed ? <Pol v={c.net}>{signedUsd(c.net)}</Pol> : "—"}</td>
+                  <td className="muted">{c.blocked ?? "open"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="panel">
+        <h2>Lots sold <span className="panel__hint">newest first</span></h2>
+        <table>
+          <thead><tr><th>When</th><th>Coin</th><th className="r">Entry</th><th className="r">Exit</th><th className="r">Hold</th><th className="r">Net</th></tr></thead>
+          <tbody>
+            {L.closed.length === 0 && <tr><td colSpan={6} className="muted">no lot sold yet (each coin is watched 3 minutes before its first lot)</td></tr>}
+            {[...L.closed].reverse().slice(0, 30).map((x) => (
+              <tr key={x.id}>
+                <td className="muted">{ago(x.close, now)}</td>
+                <td>{x.coin}</td>
+                <td className="r">{price(x.entry)}</td>
+                <td className="r">{price(x.exit)}</td>
+                <td className="r">{mins(x.hold_s)}</td>
+                <td className="r"><Pol v={x.net}>{signedUsd(x.net)}</Pol></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="muted">{p.status.decider}</p>
+      </section>
+    </>
+  );
+}
+
 function MetaPanels({ p, m, now }: { p: Performance; m: MetaInfo; now: number }) {
   const c = m.config;
   const live = m.radar.filter((r) => r.status !== "rejected").slice(0, 20);
@@ -961,6 +1075,9 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const isKalshi = slideKey === "kalshi";
   const isRug = slideKey === "rugsniper";
   const isCopy = slideKey === "copydesk";
+  const isLot = slideKey === "lotladder";
+  const lotPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.lotladder;
+  const lotInfo = (lotPerf as unknown as { lots?: LotInfo } | undefined)?.lots;
   const isMeta = slideKey === "metasniper" || isRug || isCopy;
   const metaPerf = data.perf.strategies?.metasniper;
   const rugPerf = data.perf.strategies?.rugsniper;
@@ -969,7 +1086,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const ideaPerf = slideKey.startsWith("idea:") ? data.perf.strategies?.[slideKey as `idea:${string}`] : undefined;
   const idea = ideaPerf?.idea;
   const isIdea = !!(ideaPerf && idea);
-  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isRug && rugPerf ? rugPerf : isCopy && copyPerf ? copyPerf : isMeta && metaPerf ? metaPerf
+  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isRug && rugPerf ? rugPerf : isCopy && copyPerf ? copyPerf : isLot && lotPerf ? lotPerf : isMeta && metaPerf ? metaPerf
     : isIdea ? (ideaPerf as Performance) : data.perf;
   const meta = isMeta && p.sniper ? (p.sniper as unknown as MetaInfo) : undefined;
   const kal = isKalshi ? p.kalshi : undefined;
@@ -1018,6 +1135,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             {isSniper
               ? "paper trading · Solana DEX memecoins · DexScreener radar"
               : isKalshi ? "paper trading · Kalshi prediction markets · public order books + trade tape"
+              : isLot ? "paper trading · OKX spot · Rob's STRAFE HELM lot engine (run #5 rules) on live prices"
               : isCopy ? "paper trading · copy trading · fomo's top wallets on Solana, Robinhood Chain and Base → hard facts → Grok verdict"
               : isRug ? "paper trading · Solana memecoins · DexScreener profiles behind Rugcheck's fact checks"
               : isMeta ? "paper trading · Solana + Base memecoins · DexScreener profiles (description, website or X)"
@@ -1042,6 +1160,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : s.key === "metasniper" ? (metaPerf?.equity ?? null)
           : s.key === "rugsniper" ? (rugPerf?.equity ?? null)
           : s.key === "copydesk" ? (copyPerf?.equity ?? null)
+          : s.key === "lotladder" ? (lotPerf?.equity ?? null)
             : data.perf.strategies?.[s.key as `idea:${string}`]?.equity ?? null)} />
 
       <div key={slideKey} className={`slide slide--from-${dir}`}>
@@ -1057,7 +1176,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
 
         <section className="hero">
           <div>
-            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isRug ? "Strategy 23 paper equity" : isCopy ? "Strategy 25 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
+            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isRug ? "Strategy 23 paper equity" : isCopy ? "Strategy 25 paper equity" : isLot ? "Strategy 26 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
             <div className="hero__equity">{usd(p.equity)}</div>
             <div className="hero__pnl">
               <Pol v={p.pnl}>{arrow(p.pnl)} {signedUsd(p.pnl)} ({pct(p.pnl_pct, 2, true)})</Pol>
@@ -1071,6 +1190,14 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               <span><i className="swatch swatch--zone" /> snipe zone</span>
               <span><i className="swatch swatch--reject" /> rejected</span>
               <span className="legend__note">x: pair age · y: 5-minute move · depth: buy pressure · size: liquidity · lines link nearest neighbours · drag to orbit, hover a token</span>
+            </div>
+          ) : isLot ? (
+            <div className="legend" aria-label="Legend">
+              <span><i className="swatch swatch--zone" /> live price</span>
+              <span><i className="swatch swatch--gain" /> lot above price (waiting to sell)</span>
+              <span><i className="swatch swatch--loss" /> bag (lot under water, held by never-loss)</span>
+              <span><i className="swatch swatch--held" /> maker target</span>
+              <span className="legend__note">one glass tube per coin · discs: $50 lots at their entry price, 2% per step from the live price · gold ticks: where each lot sells for +$0.40 net (lower as it ages) · green sparks: lots sold in the last 15 min · drag to orbit, hover a tube</span>
             </div>
           ) : isCopy ? (
             <div className="legend" aria-label="Legend">
@@ -1149,6 +1276,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
       <section className={`scene ${isSniper ? "scene--sniper" : isIdea || isKalshi || isMeta ? "scene--idea" : ""}`}
         aria-label={isSniper ? "3D cluster map of Solana pairs the sniper is tracking"
           : isKalshi ? "3D order-book towers for the Kalshi markets the scalper works"
+          : isLot ? "3D lot elevator: every coin's $50 lots at their entry prices around the live price"
           : isCopy ? "3D relay of fomo traders' buys flying through the Rugcheck and Grok gates"
           : isRug ? "3D market-cap elevator of the Solana memecoins Rugcheck let through"
           : isMeta ? "3D market-cap elevator of new memecoins with metadata, Solana and Base"
@@ -1175,6 +1303,11 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         {visited.rugsniper && rugPerf?.sniper && (
           <div className={`scene__layer ${isRug ? "scene__layer--on" : ""}`} aria-hidden={!isRug}>
             <MetaScene info={rugPerf.sniper as unknown as MetaInfo} active={isRug} />
+          </div>
+        )}
+        {visited.lotladder && lotInfo && (
+          <div className={`scene__layer ${isLot ? "scene__layer--on" : ""}`} aria-hidden={!isLot}>
+            <LotScene info={lotInfo} active={isLot} />
           </div>
         )}
         {visited.copydesk && copyPerf?.sniper && (
@@ -1212,6 +1345,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
 
         {isSniper && sn ? <SniperPanels p={p} sn={sn} demo={sniperDemo} now={now} />
           : isKalshi && kal ? <KalshiPanels k={kal} now={now} />
+          : isLot && lotInfo ? <LotPanels p={p} L={lotInfo} now={now} />
           : isMeta && meta ? <MetaPanels p={p} m={meta} now={now} />
           : isIdea && idea ? <IdeaPanels p={p} idea={idea} /> : <TrendPanels p={p} />}
 
@@ -1359,6 +1493,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             ? "Paper trading only — Kalshi orders are simulated against the public order books and trade tape with Kalshi's fee schedule; nothing is sent to Kalshi. Not investment advice."
             : isIdea
             ? `Paper trading only — idea-lab book with its own ${usd(p.start_balance, false)}. Both legs are simulated Hyperliquid market orders (perp 4.5 bp, spot 7 bp taker, plus spread and latency); funding is settled hourly at the exchange's rate. Not investment advice.`
+            : isLot
+            ? "Paper trading only — no order is sent to OKX. Lots are simulated against OKX's live best bid/ask: taker buys at the ask + 0.05% with a 0.35% fee, maker sells fill when the bid reaches the target, 0.20% fee. Never-loss means losses sit in held lots: equity marks every bag at the bid. Not investment advice."
             : isCopy
             ? "Paper trading only — no copyfomo, no Telegram, no real order. Leader wallets are read from public Solana transactions; our copies are simulated swaps priced from real DexScreener pool data with AMM price impact, DEX fee, priority fee and latency slippage. fomo's board is an unofficial public feed. Most copy traders lose money. Not investment advice."
             : isRug
