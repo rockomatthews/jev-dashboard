@@ -539,12 +539,15 @@ function CopyDeskPanels({ p, m, c, now }: { p: Performance; m: MetaInfo; c: Copy
             only five names from a board. So far it has read {f.fills.toLocaleString()} fills by {f.wallets.toLocaleString()}{" "}
             traders over the last {f.hours} h{f.backfill_pct < 1 ? ` (history ${Math.round(f.backfill_pct * 100)}% loaded)` : ""}.
             Every {Math.round((c.rules as unknown as { pick_every_h?: number }).pick_every_h ?? 6)} hours the best of
-            them by measured profit go through your copydesk cut and Grok&apos;s ranking, and the winners become the leaders.
+            them by measured profit go through the copy cut and Grok&apos;s ranking, and the winners become the leaders. The copy
+            cut keeps traders a copy that is 20–40 seconds late can still follow: 5+ round trips on 3+ tokens, a median hold
+            of 2+ minutes, a median size of $20+, 50%+ wins, no coin above 60% of the profit, and a profit overall. Most of
+            the busiest wallets on the tape are bots: they farm one token with 6-second holds and $7–10 clips.
           </p>
           <table>
-            <thead><tr><th>Trader (passes the cut)</th><th className="r">Closed</th><th className="r">Win</th><th className="r">Measured PnL</th><th className="r">Avg hold</th><th className="r">Volume</th></tr></thead>
+            <thead><tr><th>Trader (passes the cut)</th><th className="r">Closed</th><th className="r">Win</th><th className="r">Measured PnL</th><th className="r">Tokens</th><th className="r">Median hold</th><th className="r">Median size</th></tr></thead>
             <tbody>
-              {f.top.length === 0 && <tr><td colSpan={6} className="muted">nobody passes the cut yet (needs 20+ closed trades, 55%+ wins, no one-coin luck, green week)</td></tr>}
+              {f.top.length === 0 && <tr><td colSpan={7} className="muted">nobody passes the copy cut yet</td></tr>}
               {f.top.map((t) => (
                 <tr key={t.wallet}>
                   <td><a href={`https://robinhoodchain.blockscout.com/address/${t.wallet}`} target="_blank" rel="noreferrer">{t.wallet.slice(0, 6)}…{t.wallet.slice(-4)}</a>
@@ -552,8 +555,9 @@ function CopyDeskPanels({ p, m, c, now }: { p: Performance; m: MetaInfo; c: Copy
                   <td className="r">{t.closed_trades}</td>
                   <td className="r">{t.win_rate === null ? "—" : pct(t.win_rate, 0)}</td>
                   <td className="r">{t.pnl_30d_usd === null ? "—" : <Pol v={t.pnl_30d_usd}>{signedUsd(t.pnl_30d_usd)}</Pol>}</td>
-                  <td className="r">{t.avg_hold_minutes === null ? "—" : `${Math.round(t.avg_hold_minutes)} min`}</td>
-                  <td className="r">{t.volume_usd === undefined ? "—" : compactUsd(t.volume_usd)}</td>
+                  <td className="r">{(t as unknown as { tokens?: number }).tokens ?? "—"}</td>
+                  <td className="r">{(t as unknown as { median_hold_minutes?: number }).median_hold_minutes == null ? "—" : `${Math.round((t as unknown as { median_hold_minutes: number }).median_hold_minutes)} min`}</td>
+                  <td className="r">{(t as unknown as { median_size_usd?: number }).median_size_usd == null ? "—" : compactUsd((t as unknown as { median_size_usd: number }).median_size_usd)}</td>
                 </tr>
               ))}
             </tbody>
