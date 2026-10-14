@@ -523,6 +523,38 @@ function CopyDeskPanels({ p, m, c, now }: { p: Performance; m: MetaInfo; c: Copy
         {c.pick_log.length > 0 && <p className="muted">Last pick: {c.pick_log.slice(-6).join(" · ")}</p>}
       </section>
 
+      {(c.firehose ?? []).map((f) => (
+        <section className="panel" key={f.chain}>
+          <h2>fomo tape · {f.chain} <span className="panel__hint">every fill on fomo&apos;s settlement contract, every trader scored</span></h2>
+          <p className="strategy__what">
+            Every fomo buy on this chain is delivered from one settlement contract, and every sell goes back into it, with
+            the dollar leg in the same transaction. The desk reads all of them, so it can score every fomo trader instead of
+            only five names from a board. So far it has read {f.fills.toLocaleString()} fills by {f.wallets.toLocaleString()}{" "}
+            traders over the last {f.hours} h{f.backfill_pct < 1 ? ` (history ${Math.round(f.backfill_pct * 100)}% loaded)` : ""}.
+            Every {Math.round((c.rules as unknown as { pick_every_h?: number }).pick_every_h ?? 6)} hours the best of
+            them by measured profit go through your copydesk cut and Grok&apos;s ranking, and the winners become the leaders.
+          </p>
+          <table>
+            <thead><tr><th>Trader (passes the cut)</th><th className="r">Closed</th><th className="r">Win</th><th className="r">Measured PnL</th><th className="r">Avg hold</th><th className="r">Volume</th></tr></thead>
+            <tbody>
+              {f.top.length === 0 && <tr><td colSpan={6} className="muted">nobody passes the cut yet (needs 20+ closed trades, 55%+ wins, no one-coin luck, green week)</td></tr>}
+              {f.top.map((t) => (
+                <tr key={t.wallet}>
+                  <td><a href={`https://robinhoodchain.blockscout.com/address/${t.wallet}`} target="_blank" rel="noreferrer">{t.wallet.slice(0, 6)}…{t.wallet.slice(-4)}</a>
+                    {c.leaders.some((l) => (l as unknown as { evm?: string }).evm === t.wallet) && <b className="pol pol--gain"> ★ leader</b>}</td>
+                  <td className="r">{t.closed_trades}</td>
+                  <td className="r">{t.win_rate === null ? "—" : pct(t.win_rate, 0)}</td>
+                  <td className="r">{t.pnl_30d_usd === null ? "—" : <Pol v={t.pnl_30d_usd}>{signedUsd(t.pnl_30d_usd)}</Pol>}</td>
+                  <td className="r">{t.avg_hold_minutes === null ? "—" : `${Math.round(t.avg_hold_minutes)} min`}</td>
+                  <td className="r">{t.volume_usd === undefined ? "—" : compactUsd(t.volume_usd)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {f.last_error && <p className="muted">last read error: {f.last_error}</p>}
+        </section>
+      ))}
+
       <section className="panel">
         <h2>Every leader move <span className="panel__hint">newest first · {total} decisions so far</span></h2>
         <div className="rules">

@@ -28,6 +28,10 @@ export type CopyBlock = {
   leaders_source: string; last_pick_ms: number; next_pick_ms: number | null;
   candidates: CopyCandidate[]; events: CopyEvent[]; counts: Record<string, number>; pick_log: string[];
   tape_swaps: number; missed_tx: number;
+  firehose?: { chain: string; settlement: string; fills: number; wallets: number; hours: number; backfill_pct: number;
+    missed_blocks: number; last_error: string;
+    top: { wallet: string; closed_trades: number; win_rate: number | null; pnl_30d_usd: number | null;
+      avg_hold_minutes: number | null; volume_usd?: number; top_coin_share: number | null }[] }[];
   rpc: { calls: number; errors: number; last_error: string; endpoint: string | null };
   grok: { via: string; calls_last_hour: number; budget_per_hour: number };
   rules: { min_leader_usd: number; max_signal_age_s: number; min_confidence: number; mirror_min_frac: number;
