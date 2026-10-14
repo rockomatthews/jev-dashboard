@@ -400,7 +400,33 @@ export type PulseScene = {
   live_day?: number | null;
 };
 
-export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene | EchoScene | CountdownScene | LadderScene | OrbitScene | QuadrantScene | PulseScene;
+export type WebNode = { corr: number; vol: number | null; beta: number | null; w: number };
+
+export type WebScene = {
+  kind: "web";
+  title?: string;
+  decided?: string;               // date the shown book was decided (Monday)
+  decided_day?: number | null;    // live book's Monday as a UTC day number
+  nodes: Record<string, WebNode>; // corr = 180d corr of 3-day returns with BTC, vol = annualised, w = weight at 1x
+  weeks: { t: string; ret_pct: number }[];  // last 26 weekly long-minus-short results at 1x, oldest first
+  leverage?: number;
+  corr_window_days?: number;
+};
+
+export type RibbonCoin = { bm_bp: number; w: number; path_bp: (number | null)[] };
+
+export type RibbonsScene = {
+  kind: "ribbons";
+  title?: string;
+  decided?: string;                 // date the shown book was decided (Monday)
+  dates?: string[];                 // the 9 weekly points of each ribbon, oldest first
+  coins: Record<string, RibbonCoin>; // bm_bp = 4-week change of 7-day mean premium (bp), w = weight at 1x
+  weeks: { t: string; ret_pct: number }[];
+  leverage?: number;
+  lookback_weeks?: number;
+};
+
+export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene | EchoScene | CountdownScene | LadderScene | OrbitScene | QuadrantScene | PulseScene | WebScene | RibbonsScene;
 
 export type IdeaInfo = {
   slug: string;
