@@ -426,7 +426,24 @@ export type RibbonsScene = {
   lookback_weeks?: number;
 };
 
-export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene | EchoScene | CountdownScene | LadderScene | OrbitScene | QuadrantScene | PulseScene | WebScene | RibbonsScene;
+export type SpectrumDay = { t: string; ar: number; s15: number; l365: number; e: number | null; ret_pct: number };
+
+export type SpectrumScene = {
+  kind: "spectrum";
+  title?: string;
+  asof?: string;                    // date of the decision the numbers belong to
+  n_top: number;                    // eigenvalues counted in the absorption ratio (1/5 of the coins)
+  ar: number;                       // absorption ratio, 0..1
+  shift: number | null;             // (15-day mean AR - 1-year mean AR) / 1-year std
+  exposure: number | null;          // 0 cash, 0.5 half, 1 all in (before leverage)
+  leverage?: number;
+  threshold?: number;
+  eig_share: number[];              // share of total variance per principal component, largest first
+  coins: Record<string, { pc1: number; vol_ann: number }>;
+  history: SpectrumDay[];           // last 365 days, oldest first
+};
+
+export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene | EchoScene | CountdownScene | LadderScene | OrbitScene | QuadrantScene | PulseScene | WebScene | RibbonsScene | SpectrumScene;
 
 export type IdeaInfo = {
   slug: string;
