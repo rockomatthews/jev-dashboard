@@ -88,6 +88,89 @@ function Pol({ v, children }: { v: number; children: React.ReactNode }) {
   return <span className={`pol pol--${polarity(v)}`}>{children}</span>;
 }
 
+// =============================================================================================
+// Jev A/B: the control book vs its "+Jev" twin (same code, same candidates, one Jev risk gate before entries)
+// =============================================================================================
+type JevGateInfo = { source: string; counts: Record<string, number>; calls_last_hour: number; budget_per_hour: number;
+  errors: number; last_error: string; rules: { skip_toxic: number; half_toxic: number; half_on_reduce: boolean; skip_on_crisis: boolean; ttl_min: number } };
+type JevAB = { equity: number; pnl: number; pnl_pct: number; realized: number; unrealized: number; max_drawdown: number;
+  closed: number; open: number; win_rate: number | null; gate: JevGateInfo;
+  since?: { control_equity: number; twin_equity: number; ts: number }; control_change?: number; twin_change?: number };
+type CopyJevAB = { by_verdict: Record<string, number>; control_pnl: number; gated_pnl: number;
+  open_by_verdict: Record<string, number>; gate: JevGateInfo };
+
+const JEV_VERDICT: Record<string, string> = { FULL: "full size", HALF: "half size", SKIP: "skipped", no_read: "no Jev read (full size)" };
+
+function JevGateRules({ g }: { g: JevGateInfo }) {
+  return (
+    <div className="rules">
+      <span className="rule rule--loss">toxic ≥ {g.rules.skip_toxic.toFixed(2)} → skip</span>
+      <span className="rule">toxic ≥ {g.rules.half_toxic.toFixed(2)}{g.rules.half_on_reduce ? " or risk “reduce”" : ""} → half size</span>
+      {g.rules.skip_on_crisis && <span className="rule rule--loss">regime “crisis” → skip</span>}
+      <span className="rule rule--gain">otherwise full size</span>
+      <span className="rule">one read per token per {g.rules.ttl_min} min · {g.calls_last_hour}/{g.budget_per_hour} calls this hour</span>
+    </div>
+  );
+}
+
+function JevABPanel({ p, now }: { p: Performance; now: number }) {
+  const ab = (p as unknown as { jev_ab?: JevAB }).jev_ab;
+  const cab = (p.sniper as unknown as { copy?: { jev_ab?: CopyJevAB } } | undefined)?.copy?.jev_ab;
+  if (!ab && !cab) return null;
+  const why = (
+    <p className="strategy__what">
+      Jev can&apos;t call direction: across 10,513 graded calls it was right 45% of the time an hour ahead, and its
+      most confident calls did worse. But its toxic-flow read tracks how hard the next hour moves (0.2 → 47 bp, 0.5 →
+      76 bp, 0.6 → 157 bp). So here Jev is asked right before each entry, and too-hot entries are skipped or halved.
+    </p>
+  );
+  if (ab) {
+    const g = ab.gate;
+    const cc = ab.control_change ?? null;
+    const tc = ab.twin_change ?? null;
+    const edge = cc !== null && tc !== null ? tc - cc : null;
+    return (
+      <section className="panel">
+        <h2>Jev A/B <span className="panel__hint">this book vs its “+Jev” twin · same code, same candidates, own $10k{ab.since ? ` · since ${ago(ab.since.ts, now)}` : ""}</span></h2>
+        {why}
+        <JevGateRules g={g} />
+        <table>
+          <thead><tr><th></th><th className="r">Change since the twin started</th><th className="r">Equity</th><th className="r">Closed</th><th className="r">Open</th><th className="r">Max drawdown</th></tr></thead>
+          <tbody>
+            <tr><td>Control (no Jev)</td><td className="r">{cc === null ? "—" : <Pol v={cc}>{signedUsd(cc)}</Pol>}</td><td className="r">{usd(p.equity)}</td><td className="r">{p.trades.closed}</td><td className="r">{p.trades.open}</td><td className="r">{pct(-p.max_drawdown, 1)}</td></tr>
+            <tr><td><b>+Jev gate</b></td><td className="r">{tc === null ? "—" : <Pol v={tc}>{signedUsd(tc)}</Pol>}</td><td className="r">{usd(ab.equity)}</td><td className="r">{ab.closed ?? 0}</td><td className="r">{ab.open ?? 0}</td><td className="r">{pct(-(ab.max_drawdown ?? 0), 1)}</td></tr>
+          </tbody>
+        </table>
+        <p className="muted">
+          {edge === null ? "" : <>Jev&apos;s edge so far: <Pol v={edge}>{signedUsd(edge)}</Pol>. </>}
+          Gate verdicts: {Object.entries(g.counts).map(([k, v]) => `${JEV_VERDICT[k] ?? k} ${v}`).join(" · ") || "none yet"}
+          {g.errors ? ` · ${g.errors} Jev errors (last: ${g.last_error})` : ""}
+        </p>
+      </section>
+    );
+  }
+  const c = cab as CopyJevAB;
+  return (
+    <section className="panel">
+      <h2>Jev A/B <span className="panel__hint">every copy tagged with the Jev gate&apos;s verdict · P&amp;L split by verdict</span></h2>
+      {why}
+      <p className="strategy__what">Copy Desk books every copy either way (a twin would read fomo&apos;s tape twice). The
+        gated result counts FULL copies, half of HALF copies, and none of the SKIP copies.</p>
+      <JevGateRules g={c.gate} />
+      <table>
+        <thead><tr><th>Jev verdict</th><th className="r">Realized P&amp;L</th><th className="r">Open copies</th></tr></thead>
+        <tbody>
+          {["FULL", "HALF", "SKIP"].map((v) => (
+            <tr key={v}><td>{JEV_VERDICT[v]}</td><td className="r"><Pol v={c.by_verdict[v] ?? 0}>{signedUsd(c.by_verdict[v] ?? 0)}</Pol></td><td className="r">{c.open_by_verdict[v] ?? 0}</td></tr>
+          ))}
+          <tr><td>Without Jev (all copies)</td><td className="r"><Pol v={c.control_pnl}>{signedUsd(c.control_pnl)}</Pol></td><td></td></tr>
+          <tr><td><b>With the Jev gate</b></td><td className="r"><Pol v={c.gated_pnl}>{signedUsd(c.gated_pnl)}</Pol></td><td></td></tr>
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 function Stat({ label, value, sub, v }: { label: string; value: string; sub?: string; v?: number }) {
   return (
     <div className="stat">
@@ -1346,6 +1429,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         </section>
 
         <BacktestLab focus={SLIDE_TO_BACKTEST[slideKey] ?? null} />
+
+        <JevABPanel p={p} now={now} />
 
         {isSniper && sn ? <SniperPanels p={p} sn={sn} demo={sniperDemo} now={now} />
           : isKalshi && kal ? <KalshiPanels k={kal} now={now} />
