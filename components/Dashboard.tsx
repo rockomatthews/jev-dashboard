@@ -6,6 +6,7 @@ import { demoSniperPerf } from "@/lib/demo-sniper";
 import BacktestLab, { SLIDE_TO_BACKTEST } from "./BacktestLab";
 import type { CopyBlock, CopyInfo } from "./CopyScene";
 import type { LotInfo } from "./LotScene";
+import { reachedAtLeast, type MoonInfo } from "./MoonshotScene";
 import { ago, arrow, num, pct, polarity, price, signedUsd, usd, when } from "@/lib/format";
 import type { IdeaInfo, KalshiInfo, MetaInfo, Performance, PerfResponse, RadarItem, SniperInfo } from "@/lib/types";
 
@@ -31,6 +32,7 @@ const MetaScene = dynamic(() => import("./MetaScene"), {
 
 const CopyScene = dynamic(() => import("./CopyScene"), { ssr: false });
 const LotScene = dynamic(() => import("./LotScene"), { ssr: false });
+const MoonshotScene = dynamic(() => import("./MoonshotScene"), { ssr: false });
 const IdeaScene = dynamic(() => import("./IdeaScene"), {
   ssr: false,
   loading: () => <div className="scene-loading">Raising the landscape…</div>,
@@ -81,11 +83,171 @@ function buildSlides(perf: Performance): Slide[] {
     ? [{ key: "lotladder", n: 26, name: "Lot Ladder",
         blurb: "Rob's STRAFE HELM OKX lot engine · $50 taker lots, 6 per coin · maker exit at +$0.40 net (decays to $0.25) · never sells at a loss · bags marked at the bid" }]
     : [];
-  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...copy, ...lot];
+  const moonPerf = (perf.strategies as Record<string, Performance | undefined> | undefined)?.moonshot;
+  const moon: Slide[] = (moonPerf as unknown as { moonshot?: unknown } | undefined)?.moonshot
+    ? [{ key: "moonshot", n: 30, name: "Moonshot",
+        blurb: "$100 → $1M on Papertrade's exact rules (papertrade.xyz) · live Hyperliquid BTC mid · three all-in lanes: 100x ×10, 20x ×2, 1000x ×100 · every bust restarts at $100 and the tries are counted" }]
+    : [];
+  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...copy, ...lot, ...moon];
 }
 
 function Pol({ v, children }: { v: number; children: React.ReactNode }) {
   return <span className={`pol pol--${polarity(v)}`}>{children}</span>;
+}
+
+// =============================================================================================
+// Strategy 30 panels (Moonshot): $100 -> $1M on Papertrade's rules, tries counted
+// =============================================================================================
+const moneyShort = (v: number) => (v >= 1e6 ? `$${(v / 1e6).toFixed(v >= 1e7 ? 0 : 1)}M` : v >= 1e3 ? `$${(v / 1e3).toFixed(v >= 1e4 ? 0 : 1)}k` : `$${v.toFixed(0)}`);
+const durShort = (ms: number) => (ms < 60_000 ? `${Math.max(0, Math.round(ms / 1000))} s` : ms < 3_600_000 ? `${Math.round(ms / 60_000)} min`
+  : ms < 172_800_000 ? `${(ms / 3_600_000).toFixed(1)} h` : `${(ms / 86_400_000).toFixed(1)} d`);
+
+function MoonPanels({ M, now }: { M: MoonInfo; now: number }) {
+  const lanes = M.lanes;
+  const tries = lanes.reduce((a, l) => a + l.tries, 0);
+  const busts = lanes.reduce((a, l) => a + l.busts, 0);
+  const moons = lanes.reduce((a, l) => a + l.moons, 0);
+  const paidIn = lanes.reduce((a, l) => a + l.paid_in, 0);
+  const paidOut = lanes.reduce((a, l) => a + l.paid_out, 0);
+  const net = paidOut - paidIn;
+  const r = M.rules;
+  const history = lanes
+    .flatMap((l) => l.history.map((h) => ({ ...h, lane: l.key, lev: l.lev })))
+    .sort((a, b) => b.end - a.end)
+    .slice(0, 30);
+  return (
+    <>
+      <section className="stats">
+        <Stat label="Tries finished" value={num(tries, 0)} sub={`${busts} busts · ${moons} reached $1M`} />
+        <Stat label="Paid in" value={usd(paidIn, false)} sub={`${usd(M.stake_usd, false)} for every try started`} />
+        <Stat label="Paid out" value={usd(paidOut, false)} sub={moons ? `${moons} × $1M+` : "nothing has reached $1M yet"} />
+        <Stat label="Net" value={signedUsd(net, false)} v={net} sub="what a real trader would be up or down" />
+        <Stat label="Running since" value={M.started_ms ? when(M.started_ms) : "—"} sub={M.started_ms ? `${durShort(now - M.started_ms)} on live BTC` : "starting"} />
+        <Stat label="BTC mid" value={M.mid ? price(M.mid) : "—"} sub={M.mid_ms ? `Hyperliquid best bid/ask · ${ago(M.mid_ms, now)}` : "waiting for the book"} />
+      </section>
+
+      <section className="panel">
+        <h2>Strategy 30 <span className="panel__hint">Moonshot · Papertrade&apos;s rules on live BTC · paper only, nothing sent to Papertrade</span></h2>
+        <p className="strategy__what">
+          Can {usd(M.stake_usd, false)} become {usd(M.goal_usd, false)} on Papertrade? Each lane starts a try with{" "}
+          {usd(M.stake_usd, false)} and puts all of it into one BTC position at its leverage, in the direction of
+          BTC&apos;s 24-hour trend. Prices are Hyperliquid&apos;s live best bid/ask mid, the same price Papertrade uses.
+          When the take-profit price is reached, the payout after Papertrade&apos;s win haircut and 2% win fee rolls into
+          the next step. A bust loses the whole stake and the lane starts again with a fresh {usd(M.stake_usd, false)}.
+          The counters show how many {usd(M.stake_usd, false)} tries it takes, and how far each one got.
+        </p>
+        <div className="rules">
+          <span className="rule">price: Hyperliquid BBO mid</span>
+          <span className="rule rule--loss">bust {r.bust_buffer_bp} bp before zero equity (1000x busts at a 0.05% move)</span>
+          <span className="rule">wins: {r.deadband_bp} bp deadband, then a size- and move-based haircut</span>
+          <span className="rule rule--loss">{Math.round(r.win_fee * 100)}% fee on winning closes</span>
+          <span className="rule">no fees on losses · no funding · no spread</span>
+          <span className="rule">{moneyShort(r.max_notional)} notional cap per position</span>
+        </div>
+        <p className="muted">Rules from {M.source}. Feed errors so far: {M.feed_errors}{M.last_error ? ` · last: ${M.last_error}` : ""}.</p>
+      </section>
+
+      <section className="panel">
+        <h2>The three lanes <span className="panel__hint">the live try, its take-profit and bust prices, and the counters</span></h2>
+        <div className="moon-lanes">
+          {lanes.map((l) => {
+            const p = l.position;
+            const live = l.equity * (l.live_multiple ?? 1);
+            const span = p ? p.tp - p.bust : 0;
+            const at = p && span ? Math.max(0, Math.min(1, (M.mid - p.bust) / span)) : 0.5;
+            const entryAt = p && span ? Math.max(0, Math.min(1, (p.entry - p.bust) / span)) : 0.5;
+            const toTp = p && M.mid ? ((p.tp - M.mid) / M.mid) * p.side : null;
+            const toBust = p && M.mid ? ((M.mid - p.bust) / M.mid) * p.side : null;
+            const naive = (l.step_mult - 1) / l.lev;
+            return (
+              <div key={l.key} className="moon-lane">
+                <div className="moon-lane__head">
+                  <b>{l.key.toUpperCase()}</b>
+                  <span className="muted">{l.name}</span>
+                </div>
+                <div className="moon-lane__big">
+                  <Pol v={live - l.equity}>{moneyShort(live)}</Pol>{" "}
+                  <span className="muted">step {l.step}/{l.steps_needed} · try {l.tries + 1}</span>
+                </div>
+                {p ? (
+                  <>
+                    <div className="moon-lane__row"><span>{p.side > 0 ? "▲ long" : "▼ short"} {moneyShort(p.margin)} × {num(p.lev, 0)}</span><b>entry {price(p.entry)}</b></div>
+                    <div className="moon-meter" title="bust ← live price → take profit">
+                      <i style={{ left: `${entryAt * 100}%`, background: "#9fb4d8", boxShadow: "none" }} />
+                      <i style={{ left: `${at * 100}%` }} />
+                    </div>
+                    <div className="moon-meter__ends"><span>bust {price(p.bust)}</span><span>TP {price(p.tp)}</span></div>
+                    <div className="moon-lane__row"><span>to take profit</span><b>{toTp === null ? "—" : pct(toTp, 2)}</b></div>
+                    <div className="moon-lane__row"><span>to bust</span><b className={toBust !== null && toBust < 0.002 ? "pol pol--loss" : ""}>{toBust === null ? "—" : pct(toBust, 2)}</b></div>
+                    <div className="moon-lane__row"><span>open for</span><b>{durShort(now - p.opened_ms)}</b></div>
+                  </>
+                ) : (
+                  <p className="empty">opening the next position…</p>
+                )}
+                <div className="moon-lane__row"><span>BTC move to win a step</span><b>{pct(l.take_profit_move, 2)} <span className="muted">(not {pct(naive, 2)}: haircut + fee)</span></b></div>
+                <div className="moon-lane__row"><span>BTC move to bust</span><b>{pct(l.bust_move, 2)}</b></div>
+                <div className="moon-lane__row"><span>tries · busts · $1M</span><b>{l.tries} · {l.busts} · {l.moons}</b></div>
+                <div className="moon-lane__row"><span>paid in → out</span><b><Pol v={l.net}>{usd(l.paid_in, false)} → {usd(l.paid_out, false)}</Pol></b></div>
+                <div className="moon-lane__row"><span>best stake ever</span><b>{moneyShort(l.best_equity)}</b></div>
+                <div className="moon-lane__row"><span>odds here · backtest</span><b>{l.tries ? `${l.moons} in ${l.tries}` : "—"} · {M.backtest[l.key] ?? "—"}</b></div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>How far the tries got <span className="panel__hint">share of finished tries that reached each rung</span></h2>
+        <div className="moon-lanes">
+          {lanes.map((l) => {
+            const total = Math.max(1, l.tries);
+            const rows = Array.from({ length: l.steps_needed }, (_, i) => i + 1);
+            return (
+              <div key={l.key} className="moon-lane">
+                <div className="moon-lane__head"><b>{l.key.toUpperCase()}</b><span className="muted">{l.tries} tries</span></div>
+                <div className="moon-bars">
+                  {rows.map((k) => {
+                    const n = reachedAtLeast(l.steps_won, k);
+                    const v = Math.min(M.goal_usd, M.stake_usd * Math.pow(l.step_mult, k));
+                    const share = n / total;
+                    return (
+                      <div key={k} className="moon-bar" title={`${n} of ${l.tries} tries reached ${moneyShort(v)}`}>
+                        <span>{moneyShort(v)}</span>
+                        <div className="moon-bar__track">
+                          <div className={`moon-bar__fill ${k === l.steps_needed ? "moon-bar__fill--goal" : ""}`} style={{ width: `${Math.max(n ? 2 : 0, share * 100)}%` }} />
+                        </div>
+                        <span>{n} · {l.tries ? pct(share, share > 0 && share < 0.01 ? 2 : 0) : "—"}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>Finished tries <span className="panel__hint">newest first · every bust restarts the lane at {usd(M.stake_usd, false)}</span></h2>
+        <table>
+          <thead><tr><th>Ended</th><th>Lane</th><th className="r">Lasted</th><th className="r">Steps won</th><th className="r">Peak stake</th><th>Result</th></tr></thead>
+          <tbody>
+            {history.length === 0 && <tr><td colSpan={6} className="muted">no try has finished yet: the first bust or $1M lands here</td></tr>}
+            {history.map((h, i) => (
+              <tr key={`${h.lane}-${h.end}-${i}`}>
+                <td className="muted">{ago(h.end, now)}</td>
+                <td>{h.lane} · {h.lev}x</td>
+                <td className="r">{durShort(h.end - h.start)}</td>
+                <td className="r">{h.steps}</td>
+                <td className="r">{moneyShort(h.peak)}</td>
+                <td>{h.result === "moon" ? <span className="pol pol--gain">$1M reached</span> : <span className="pol pol--loss">bust</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    </>
+  );
 }
 
 // =============================================================================================
@@ -1165,6 +1327,9 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const isLot = slideKey === "lotladder";
   const lotPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.lotladder;
   const lotInfo = (lotPerf as unknown as { lots?: LotInfo } | undefined)?.lots;
+  const isMoon = slideKey === "moonshot";
+  const moonPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.moonshot;
+  const moonInfo = (moonPerf as unknown as { moonshot?: MoonInfo } | undefined)?.moonshot;
   const isMeta = slideKey === "metasniper" || isRug || isCopy;
   const metaPerf = data.perf.strategies?.metasniper;
   const rugPerf = data.perf.strategies?.rugsniper;
@@ -1173,7 +1338,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const ideaPerf = slideKey.startsWith("idea:") ? data.perf.strategies?.[slideKey as `idea:${string}`] : undefined;
   const idea = ideaPerf?.idea;
   const isIdea = !!(ideaPerf && idea);
-  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isRug && rugPerf ? rugPerf : isCopy && copyPerf ? copyPerf : isLot && lotPerf ? lotPerf : isMeta && metaPerf ? metaPerf
+  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isRug && rugPerf ? rugPerf : isCopy && copyPerf ? copyPerf : isLot && lotPerf ? lotPerf : isMoon && moonPerf ? moonPerf : isMeta && metaPerf ? metaPerf
     : isIdea ? (ideaPerf as Performance) : data.perf;
   const meta = isMeta && p.sniper ? (p.sniper as unknown as MetaInfo) : undefined;
   const kal = isKalshi ? p.kalshi : undefined;
@@ -1222,6 +1387,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             {isSniper
               ? "paper trading · Solana DEX memecoins · DexScreener radar"
               : isKalshi ? "paper trading · Kalshi prediction markets · public order books + trade tape"
+              : isMoon ? "paper trading · Papertrade's rules (papertrade.xyz) on live Hyperliquid BTC · $100 tries, counted"
               : isLot ? "paper trading · OKX spot · Rob's STRAFE HELM lot engine (run #5 rules) on live prices"
               : isCopy ? "paper trading · copy trading · fomo's top wallets on Solana, Robinhood Chain and Base → hard facts → Grok verdict"
               : isRug ? "paper trading · Solana memecoins · DexScreener profiles behind Rugcheck's fact checks"
@@ -1248,6 +1414,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : s.key === "rugsniper" ? (rugPerf?.equity ?? null)
           : s.key === "copydesk" ? (copyPerf?.equity ?? null)
           : s.key === "lotladder" ? (lotPerf?.equity ?? null)
+          : s.key === "moonshot" ? null
             : data.perf.strategies?.[s.key as `idea:${string}`]?.equity ?? null)} />
 
       <div key={slideKey} className={`slide slide--from-${dir}`}>
@@ -1263,12 +1430,25 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
 
         <section className="hero">
           <div>
+            {isMoon && moonInfo ? (
+              <>
+                <div className="hero__label">Strategy 30 · $100 tries at $1M</div>
+                <div className="hero__equity">{num(moonInfo.lanes.reduce((a, l) => a + l.tries, 0), 0)} tries</div>
+                <div className="hero__pnl">
+                  <Pol v={p.pnl}>{arrow(p.pnl)} {signedUsd(p.pnl)}</Pol>
+                  <span className="hero__since">
+                    paid in {usd(moonInfo.lanes.reduce((a, l) => a + l.paid_in, 0), false)} · paid out {usd(moonInfo.lanes.reduce((a, l) => a + l.paid_out, 0), false)} · {moonInfo.lanes.reduce((a, l) => a + l.moons, 0)} reached $1M
+                  </span>
+                </div>
+              </>
+            ) : (<>
             <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isRug ? "Strategy 23 paper equity" : isCopy ? "Strategy 25 paper equity" : isLot ? "Strategy 26 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
             <div className="hero__equity">{usd(p.equity)}</div>
             <div className="hero__pnl">
               <Pol v={p.pnl}>{arrow(p.pnl)} {signedUsd(p.pnl)} ({pct(p.pnl_pct, 2, true)})</Pol>
               <span className="hero__since">since {when(since)} · started with {usd(p.start_balance, false)}</span>
             </div>
+            </>)}
           </div>
           {isSniper ? (
             <div className="legend" aria-label="Legend">
@@ -1277,6 +1457,14 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               <span><i className="swatch swatch--zone" /> snipe zone</span>
               <span><i className="swatch swatch--reject" /> rejected</span>
               <span className="legend__note">x: pair age · y: 5-minute move · depth: buy pressure · size: liquidity · lines link nearest neighbours · drag to orbit, hover a token</span>
+            </div>
+          ) : isMoon ? (
+            <div className="legend" aria-label="Legend">
+              <span><i className="swatch swatch--zone" /> rocket: the stake&apos;s live value</span>
+              <span><i className="swatch swatch--held" /> take-profit ring</span>
+              <span><i className="swatch swatch--loss" /> bust plate · one ember per bust</span>
+              <span><i className="swatch swatch--carry-low" /> rungs (brighter = more tries got there)</span>
+              <span className="legend__note">one tower per lane · height: stake on a log scale, $100 on the pad to $1M at the moon · the rocket shakes and reddens as BTC nears the bust price · drag to orbit, hover a tower</span>
             </div>
           ) : isLot ? (
             <div className="legend" aria-label="Legend">
@@ -1363,6 +1551,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
       <section className={`scene ${isSniper ? "scene--sniper" : isIdea || isKalshi || isMeta ? "scene--idea" : ""}`}
         aria-label={isSniper ? "3D cluster map of Solana pairs the sniper is tracking"
           : isKalshi ? "3D order-book towers for the Kalshi markets the scalper works"
+          : isMoon ? "3D launch towers: each lane's $100 try climbing log-scale rungs toward $1M, with its bust and take-profit levels"
           : isLot ? "3D lot elevator: every coin's $50 lots at their entry prices around the live price"
           : isCopy ? "3D relay of fomo traders' buys flying through the Rugcheck and Grok gates"
           : isRug ? "3D market-cap elevator of the Solana memecoins Rugcheck let through"
@@ -1397,6 +1586,11 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             <LotScene info={lotInfo} active={isLot} />
           </div>
         )}
+        {visited.moonshot && moonInfo && (
+          <div className={`scene__layer ${isMoon ? "scene__layer--on" : ""}`} aria-hidden={!isMoon}>
+            <MoonshotScene info={moonInfo} active={isMoon} />
+          </div>
+        )}
         {visited.copydesk && copyPerf?.sniper && (
           <div className={`scene__layer ${isCopy ? "scene__layer--on" : ""}`} aria-hidden={!isCopy}>
             <CopyScene info={copyPerf.sniper as unknown as CopyInfo} active={isCopy} />
@@ -1410,6 +1604,9 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
       </section>
 
       <div key={`${slideKey}-body`} className={`slide slide--from-${dir}`}>
+        {isMoon && moonInfo ? (
+          <MoonPanels M={moonInfo} now={now} />
+        ) : (<>
         <section className="stats">
           <Stat label="Total P&L" value={signedUsd(p.pnl)} v={p.pnl} sub={pct(p.pnl_pct, 2, true)} />
           <Stat label="Realized" value={signedUsd(p.realized)} v={p.realized} sub="price P&L on closed size" />
@@ -1438,7 +1635,9 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : isMeta && meta ? <MetaPanels p={p} m={meta} now={now} />
           : isIdea && idea ? <IdeaPanels p={p} idea={idea} /> : <TrendPanels p={p} />}
 
-        {data.perf.ideas && data.perf.ideas.length > 0 && (
+        </>)}
+
+        {!isMoon && data.perf.ideas && data.perf.ideas.length > 0 && (
           <section className="panel">
             <h2>Idea lab <span className="panel__hint">one new crypto trading idea researched and tested every day</span></h2>
             <div className="ideas">
@@ -1457,7 +1656,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           </section>
         )}
 
-        {p.daily.length > 0 && (
+        {!isMoon && p.daily.length > 0 && (
           <section className="panel">
             <h2>Daily P&amp;L <span className="panel__hint">UTC days</span></h2>
             <div className="daily" role="list">
@@ -1482,6 +1681,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           </section>
         )}
 
+        {!isMoon && (<>
         <div className="grid2">
           <section className="panel">
             <h2>P&amp;L by {isSniper ? "token" : "coin"}</h2>
@@ -1577,8 +1777,12 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           </section>
         </div>
 
+        </>)}
+
         <footer className="foot">
-          {isKalshi
+          {isMoon
+            ? "Paper trading only — nothing is sent to Papertrade and no wallet is connected. Papertrade's published rules (BBO mid pricing, bust 5 bp before zero equity, win haircut and 2% win fee, $10M cap) are replayed against Hyperliquid's live BTC book. Prices are checked once a second, so a real fill could land a little differently. Real money at 100x-1000x is lost far more often than it is multiplied. Not investment advice."
+            : isKalshi
             ? "Paper trading only — Kalshi orders are simulated against the public order books and trade tape with Kalshi's fee schedule; nothing is sent to Kalshi. Not investment advice."
             : isIdea
             ? `Paper trading only — idea-lab book with its own ${usd(p.start_balance, false)}. Both legs are simulated Hyperliquid market orders (perp 4.5 bp, spot 7 bp taker, plus spread and latency); funding is settled hourly at the exchange's rate. Not investment advice.`
