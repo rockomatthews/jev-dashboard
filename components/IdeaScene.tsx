@@ -21,6 +21,8 @@ const PulseScene = dynamic(() => import("./PulseScene"), { ssr: false });
 const WebScene = dynamic(() => import("./WebScene"), { ssr: false });
 const RibbonsScene = dynamic(() => import("./RibbonsScene"), { ssr: false });
 const SpectrumScene = dynamic(() => import("./SpectrumScene"), { ssr: false });
+const CoskewScene = dynamic(() => import("./CoskewScene"), { ssr: false });
+const SectorScene = dynamic(() => import("./SectorScene"), { ssr: false });
 
 // Generic 3D view for idea-lab strategies. kind "terrain": a landscape of bars,
 // x = category (coin), z = time (oldest at the back, newest at the front), height = value.
@@ -236,6 +238,8 @@ export default function IdeaScene({ scene, active = true }: { scene: AnyScene | 
   if (scene && scene.kind === "web") return <WebScene scene={scene} active={active} />;
   if (scene && scene.kind === "ribbons") return <RibbonsScene scene={scene} active={active} />;
   if (scene && scene.kind === "spectrum") return <SpectrumScene scene={scene} active={active} />;
+  if (scene && scene.kind === "coskew") return <CoskewScene scene={scene} active={active} />;
+  if (scene && scene.kind === "sectors") return <SectorScene scene={scene} active={active} />;
   return <TerrainView scene={scene && scene.kind === "terrain" ? scene : null} active={active} />;
 }
 

@@ -443,7 +443,34 @@ export type SpectrumScene = {
   history: SpectrumDay[];           // last 365 days, oldest first
 };
 
-export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene | EchoScene | CountdownScene | LadderScene | OrbitScene | QuadrantScene | PulseScene | WebScene | RibbonsScene | SpectrumScene;
+export type CoskewCoin = { cs: number; side: number; fwd?: number | null };
+
+export type CoskewScene = {
+  kind: "coskew";
+  title?: string;
+  window_days: number;              // days of daily returns in the coskewness estimate
+  k: number;                        // coins per side
+  leverage?: number;
+  weeks: { t: string; coins: Record<string, CoskewCoin> }[];  // last 16 Monday decisions, oldest first; fwd = next-week return %
+  live?: Record<string, { cs: number; side: number }>;        // the live book's current reading
+  live_decided?: number | null;     // day number (UTC days since epoch) of the live decision
+};
+
+export type SectorCoin = { r: number | null; w?: number; side?: number; fwd?: number | null };
+export type SectorCell = { r: number; side: number; coins: Record<string, SectorCoin> };
+
+export type SectorScene = {
+  kind: "sectors";
+  title?: string;
+  lookback_days: number;            // days of return each sector is ranked on
+  sectors_per_side: number;         // sectors held long (and short)
+  leverage?: number;
+  weeks: { t: string; sectors: Record<string, SectorCell> }[];  // last 16 Monday decisions, oldest first; r in %, fwd = next-week %
+  live?: Record<string, SectorCell>;  // the live book's current reading
+  live_decided?: number | null;     // day number (UTC days since epoch) of the live decision
+};
+
+export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene | EchoScene | CountdownScene | LadderScene | OrbitScene | QuadrantScene | PulseScene | WebScene | RibbonsScene | SpectrumScene | CoskewScene | SectorScene;
 
 export type IdeaInfo = {
   slug: string;
