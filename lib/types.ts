@@ -470,7 +470,19 @@ export type SectorScene = {
   live_decided?: number | null;     // day number (UTC days since epoch) of the live decision
 };
 
-export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene | EchoScene | CountdownScene | LadderScene | OrbitScene | QuadrantScene | PulseScene | WebScene | RibbonsScene | SpectrumScene | CoskewScene | SectorScene;
+export type DownsideDay = { t: string; r: number; idx: number; dn: number; up: number; w: number };  // r in %, dn/up annualised (0.45 = 45%), w = exposure at 1x
+export type DownsideScene = {
+  kind: "downside";
+  title?: string;
+  window_days: number;              // days of basket returns in the downside-vol window
+  target: number;                   // exposure = min(cap, target / downside vol)
+  cap: number;
+  leverage?: number;                // book leverage on top of the exposure
+  days: DownsideDay[];              // last 180 days, oldest first
+  live?: { exposure?: number | null; drv?: number | null; upv?: number | null; n_coins?: number | null; decided?: number | null };
+};
+
+export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene | EchoScene | CountdownScene | LadderScene | OrbitScene | QuadrantScene | PulseScene | WebScene | RibbonsScene | SpectrumScene | CoskewScene | SectorScene | DownsideScene;
 
 export type IdeaInfo = {
   slug: string;
