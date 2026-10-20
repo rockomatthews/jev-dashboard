@@ -135,8 +135,17 @@ export type RugGate = {
            stop_loss: number; take_half_at: number; max_impact: number };
 };
 
+export type HiveGate = {
+  counts: Record<string, number>;   // "passed" and one key per kill reason (hive_risky, hive_danger, larp:scam, no_answer, ...)
+  both: Record<string, number>;     // agreement tally: "hive_ok|hive_bad" + "larp_real|larp_bad|larp_unclear|larp_none"
+  ticket_usd: number;
+  max_open: number;
+  rules: { min_hive_score: number; larp_block: string[]; stop_loss: number; take_half_at: number; max_impact: number;
+           max_hive_calls: number; hive_window_min: number };
+};
+
 export type MetaInfo = {
-  mode: "meta" | "rug";
+  mode: "meta" | "rug" | "hive";
   gate?: RugGate;                   // Strategy 23 only
   radar: MetaRadarItem[];
   scanned_total: number;
@@ -561,7 +570,7 @@ export type Performance = {
   sniper?: SniperInfo;
   kalshi?: KalshiInfo;
   ideas?: { date: string; name: string; source: string; rule: string; status: string; verdict: string; sharpe?: number | null }[];
-  strategies?: { sniper?: Performance; kalshi?: Performance; metasniper?: Performance; rugsniper?: Performance } & { [key: `idea:${string}`]: Performance | undefined };
+  strategies?: { sniper?: Performance; kalshi?: Performance; metasniper?: Performance; rugsniper?: Performance; hivesniper?: Performance } & { [key: `idea:${string}`]: Performance | undefined };
   idea?: IdeaInfo;
   scene?: IdeaScene | null;
   status: {
