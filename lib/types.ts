@@ -491,7 +491,20 @@ export type DownsideScene = {
   live?: { exposure?: number | null; drv?: number | null; upv?: number | null; n_coins?: number | null; decided?: number | null };
 };
 
-export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene | EchoScene | CountdownScene | LadderScene | OrbitScene | QuadrantScene | PulseScene | WebScene | RibbonsScene | SpectrumScene | CoskewScene | SectorScene | DownsideScene;
+export type PercentileDay = { t: string; idx: number; r28: number; pct: number; s: number; e: number };  // r28 in %, pct 0..1 vs history, s = that day's signal, e = exposure at 1x (mean of 5 tranches)
+export type PercentileScene = {
+  kind: "percentile";
+  title?: string;
+  lookback_days: number;            // look-back J
+  hold_days: number;                // tranches / hold H
+  threshold: number;                // signal when pct > threshold (2/3)
+  leverage?: number;                // book leverage on top of the exposure
+  days: PercentileDay[];            // last 240 days, oldest first
+  history_r28: number[];            // every past non-overlapping 28-day return of the basket (%), sorted
+  live?: { exposure?: number | null; tranches?: [number, number, number, number][] | null; n_coins?: number | null; decided?: number | null };
+};
+
+export type IdeaScene = TerrainScene | ChannelScene | RiderScene | JumpScene | SpotlightScene | EchoScene | CountdownScene | LadderScene | OrbitScene | QuadrantScene | PulseScene | WebScene | RibbonsScene | SpectrumScene | CoskewScene | SectorScene | DownsideScene | PercentileScene;
 
 export type IdeaInfo = {
   slug: string;
