@@ -25,11 +25,16 @@ export type DeskReport = {
   big_share: number | null; small_count: number; small_share: number | null; skip_reasons: [string, number][];
   agents: Record<string, { leads: number; fills: number; pnl: number }>;
 };
+export type TrenchWatch = { mint: string; symbol: string; agent: string; since_ms: number; due_ms: number;
+  facts: Record<string, number | string | null> | null };
+export type TrenchInfo = { watch: TrenchWatch[]; holders: Record<string, { peak: number; last: number; ms: number }>;
+  kols_known: number; rules: Record<string, number>; tools: [string, string, string][] };
 export type DeskInfo = {
   report: DeskReport; report_text: string; tasks: DeskTask[]; events: string[];
   session: { day: string; start: number; halted: boolean; halt_at: number };
   grok: { via: string; calls: number | null; searched: number | null; no_search: number | null; errors: number | null;
-    last_error: string; calls_last_hour: number; budget_per_hour: number };
+    last_error: string; calls_last_hour: number; budget_per_hour: number } | null;
+  trench?: TrenchInfo;
   source_errors: Record<string, number>;
   config: {
     model: string; start_balance: number; scanners: string[]; leads_per_run: number; scan_every_s: number; whales: number;
@@ -47,10 +52,14 @@ const C = {
   execute: new THREE.Color("#ffc94d"), exit: new THREE.Color("#3ecf8e"), rail: new THREE.Color("#1c2a4a"),
 };
 
-type Bead = { key: string; agentIdx: number; end: "verify" | "xread" | "execute"; symbol: string; reason: string; delay: number };
+type Bead = { key: string; agentIdx: number; end: "verify" | "xread" | "execute" | "watch"; symbol: string; reason: string; delay: number };
+
+/** What the second VERIFY station is on a given book: Grok's X read (Strategy 34) or the 10-minute confirm (36). */
+export type DeskStations = { second: string; secondRe: RegExp; verify: string };
+const DESK_STATIONS: DeskStations = { second: "VERIFY · Grok on X", secondRe: /^x_read|^grok_budget/, verify: "VERIFY · code" };
 
 /** Where each recent lead ended, from the task rows (newest first in the payload). */
-function beadsFrom(tasks: DeskTask[], scanners: string[]): Bead[] {
+function beadsFrom(tasks: DeskTask[], scanners: string[], secondRe: RegExp): Bead[] {
   const byMint: Record<string, DeskTask[]> = {};
   [...tasks].reverse().forEach((t) => { (byMint[t.mint] ||= []).push(t); });
   const out: Bead[] = [];
@@ -58,20 +67,23 @@ function beadsFrom(tasks: DeskTask[], scanners: string[]): Bead[] {
     const scan = rows.find((r) => r.step === "scan");
     const ver = rows.find((r) => r.step === "verify");
     const exe = rows.find((r) => r.step === "execute");
-    if (!scan && !ver) return;
+    const watch = rows.find((r) => r.step === "watch");
+    if (!scan && !ver && !watch) return;
     let end: Bead["end"] = "verify";
     if (exe && exe.result === "paper_fill") end = "execute";
-    else if (ver && /^x_read|^grok_budget/.test(ver.reason)) end = "xread";
-    out.push({ key: mint, agentIdx: Math.max(0, scanners.indexOf(scan?.agent ?? "")), end,
-      symbol: ver?.symbol || exe?.symbol || mint.slice(0, 4), reason: exe?.reason || ver?.reason || "", delay: (i * 0.37) % 6 });
+    else if (ver && secondRe.test(ver.reason)) end = "xread";
+    else if (!ver && watch) end = "watch";
+    out.push({ key: mint, agentIdx: Math.max(0, scanners.indexOf(scan?.agent ?? "")) - (scanners.length - 1) / 2 + 1.5, end,
+      symbol: ver?.symbol || exe?.symbol || watch?.symbol || mint.slice(0, 4),
+      reason: exe?.reason || ver?.reason || watch?.reason || "", delay: (i * 0.37) % 6 });
   });
   return out.slice(-48);
 }
 
 function BeadMesh({ b, onHover }: { b: Bead; onHover: (s: string | null) => void }) {
   const m = useRef<THREE.Mesh>(null);
-  const endX = X[b.end];
-  const col = b.end === "execute" ? C.execute : b.end === "xread" ? C.xread : C.verify;
+  const endX = X[b.end === "watch" ? "xread" : b.end];
+  const col = b.end === "execute" || b.end === "watch" ? C.execute : b.end === "xread" ? C.xread : C.verify;
   const startZ = (b.agentIdx - 1.5) * 1.1;
   useFrame(({ clock }) => {
     if (!m.current) return;
@@ -83,7 +95,8 @@ function BeadMesh({ b, onHover }: { b: Bead; onHover: (s: string | null) => void
     let y = 0.35;
     if (k > 0.6) {
       const f = (k - 0.6) / 0.4;
-      y = b.end === "execute" ? 0.35 + f * 1.4 : 0.35 - f * f * 3.2;  // fills rise to EXIT, skips drop into the pit
+      y = b.end === "execute" ? 0.35 + f * 1.4 : b.end === "watch" ? 0.35 + Math.sin(f * Math.PI * 2) * 0.25
+        : 0.35 - f * f * 3.2;  // fills rise to EXIT, watched coins bob at the gate, skips drop into the pit
     }
     m.current.position.set(b.end === "execute" && k > 0.6 ? endX + (X.exit - endX) * ((k - 0.6) / 0.4) : x, y, z);
     (m.current.material as THREE.MeshBasicMaterial).opacity = k > 0.9 ? (1 - k) * 10 : 1;
@@ -171,12 +184,14 @@ function CameraFit() {
   return null;
 }
 
-export default function DeskScene({ info, positions, active = true }: { info: DeskInfo; positions: DeskPosition[]; active?: boolean }) {
+export default function DeskScene({ info, positions, active = true, stations = DESK_STATIONS }: {
+  info: DeskInfo; positions: DeskPosition[]; active?: boolean; stations?: DeskStations;
+}) {
   const fx = typeof window === "undefined" || new URLSearchParams(window.location.search).get("fx") !== "0";
   const [hover, setHover] = useState<string | null>(null);
   const [spin, setSpin] = useState(false);
   const r = info.report;
-  const beads = useMemo(() => beadsFrom(info.tasks, info.config.scanners), [info.tasks, info.config.scanners]);
+  const beads = useMemo(() => beadsFrom(info.tasks, info.config.scanners, stations.secondRe), [info.tasks, info.config.scanners, stations.secondRe]);
   const hardSkips = Math.max(0, r.verified - r.passed_hard);
   const grokSkips = Math.max(0, r.passed_hard - r.fills);
   return (
@@ -197,7 +212,7 @@ export default function DeskScene({ info, positions, active = true }: { info: De
         </mesh>
         {/* four scanner dishes */}
         {info.config.scanners.map((s, i) => (
-          <group key={s} position={[X.scan, 0.35, (i - 1.5) * 1.1]}>
+          <group key={s} position={[X.scan, 0.35, (i - (info.config.scanners.length - 1) / 2) * 1.1]}>
             <mesh rotation={[0, 0, Math.PI / 2]}>
               <coneGeometry args={[0.35, 0.3, 20, 1, true]} />
               <meshBasicMaterial color={C.scan.clone().multiplyScalar(1.8)} side={THREE.DoubleSide} toneMapped={false} />
@@ -208,8 +223,8 @@ export default function DeskScene({ info, positions, active = true }: { info: De
           </group>
         ))}
         <Station x={X.scan} color={C.scan} title="SCAN" lines={[`${r.leads} leads`]} ring={false} />
-        <Station x={X.verify} color={C.verify} title="VERIFY · code" lines={[`${hardSkips} hard skips`]} pit />
-        <Station x={X.xread} color={C.xread} title="VERIFY · Grok on X" lines={[`${grokSkips} skipped`]} pit />
+        <Station x={X.verify} color={C.verify} title={stations.verify} lines={[`${hardSkips} hard skips`]} pit />
+        <Station x={X.xread} color={C.xread} title={stations.second} lines={[`${grokSkips} skipped`]} pit />
         <Station x={X.execute} color={C.execute} title="EXECUTE" lines={[`${r.fills} fills`]} />
         <Station x={X.exit} color={C.exit} title="EXIT" lines={[`${positions.length} open · ${r.closes} sells`]} ring={false} />
         <ExitZone positions={positions} ladder={info.config.exit.ladder} stopPct={info.config.exit.hard_stop_pct} onHover={setHover} />
