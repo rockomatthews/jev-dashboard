@@ -333,3 +333,6 @@ td a:hover { color: #ff9cec; }
 .moon-bar__fill--goal { background: #ffc94d; }
 .moon-bar span:last-child { text-align: right; color: var(--ink-2); }
 @media (max-width: 860px) { .moon-lanes { grid-template-columns: 1fr; } }
+
+/* ---------- Strategy 34: Grok Desk ---------- */
+.desk-report { font-family: var(--mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; color: var(--ink); background: rgba(8, 12, 22, 0.7); border: 1px solid rgba(160, 180, 230, 0.16); border-radius: 8px; padding: 10px 12px; margin: 0; overflow-x: auto; }

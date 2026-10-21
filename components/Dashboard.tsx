@@ -7,8 +7,9 @@ import BacktestLab, { SLIDE_TO_BACKTEST } from "./BacktestLab";
 import type { CopyBlock, CopyInfo } from "./CopyScene";
 import type { LotInfo } from "./LotScene";
 import { reachedAtLeast, type MoonInfo } from "./MoonshotScene";
+import type { DeskInfo, DeskPosition } from "./DeskScene";
 import { ago, arrow, num, pct, polarity, price, signedUsd, usd, when } from "@/lib/format";
-import type { IdeaInfo, KalshiInfo, MetaInfo, Performance, PerfResponse, RadarItem, SniperInfo } from "@/lib/types";
+import type { HiveGate, IdeaInfo, KalshiInfo, MetaInfo, Performance, PerfResponse, RadarItem, SniperInfo } from "@/lib/types";
 
 const Scene = dynamic(() => import("./Scene"), {
   ssr: false,
@@ -33,6 +34,7 @@ const MetaScene = dynamic(() => import("./MetaScene"), {
 const CopyScene = dynamic(() => import("./CopyScene"), { ssr: false });
 const LotScene = dynamic(() => import("./LotScene"), { ssr: false });
 const MoonshotScene = dynamic(() => import("./MoonshotScene"), { ssr: false });
+const DeskScene = dynamic(() => import("./DeskScene"), { ssr: false });
 const IdeaScene = dynamic(() => import("./IdeaScene"), {
   ssr: false,
   loading: () => <div className="scene-loading">Raising the landscape…</div>,
@@ -73,6 +75,10 @@ function buildSlides(perf: Performance): Slide[] {
     ? [{ key: "rugsniper", n: 23, name: "Rugcheck Gate",
         blurb: "Strategy 12's Solana memecoins, bought only if Rugcheck's facts pass · no open mint/freeze, top-10 ≤ 30%, LP ≥ 90% locked · flat $500 · −50% stop, half off at +100%" }]
     : [];
+  const hive: Slide[] = perf.strategies?.hivesniper?.sniper
+    ? [{ key: "hivesniper", n: 33, name: "Hive Gate",
+        blurb: "Strategy 12's Solana + Base memecoins, bought only if CrawlHive scores them CLEAN/OK and LarpCheck doesn't call them a larp or scam · flat $500 · −50% stop, half off at +100%" }]
+    : [];
   const copyPerf = (perf.strategies as Record<string, Performance | undefined> | undefined)?.copydesk;
   const copy: Slide[] = copyPerf?.sniper
     ? [{ key: "copydesk", n: 25, name: "Copy Desk",
@@ -88,11 +94,159 @@ function buildSlides(perf: Performance): Slide[] {
     ? [{ key: "moonshot", n: 30, name: "Moonshot",
         blurb: "$100 → $1M on Papertrade's exact rules (papertrade.xyz) · live Hyperliquid BTC mid · three all-in lanes: 100x ×10, 20x ×2, 1000x ×100 · every bust restarts at $100 and the tries are counted" }]
     : [];
-  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...copy, ...lot, ...moon];
+  const deskPerf = (perf.strategies as Record<string, Performance | undefined> | undefined)?.grokdesk;
+  const desk: Slide[] = (deskPerf as unknown as { desk?: unknown } | undefined)?.desk
+    ? [{ key: "grokdesk", n: 34, name: "Grok Desk",
+        blurb: "0xTimQ's desk: SCAN → VERIFY → EXECUTE → EXIT, one agent per step, nobody skips one · hard skips in code (Rugcheck + DexScreener), then Grok reads X · 10% of cash per entry · −25% stop, +40%/+100% ladder, 25% trail, 45-min time stop · paper, own $50" }]
+    : [];
+  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...hive, ...copy, ...lot, ...moon, ...desk];
 }
 
 function Pol({ v, children }: { v: number; children: React.ReactNode }) {
   return <span className={`pol pol--${polarity(v)}`}>{children}</span>;
+}
+
+// =============================================================================================
+// Strategy 34 panels (Grok Desk): the funnel, the report screen, the agents, the exits, every task
+// =============================================================================================
+const DESK_STEP: Record<string, string> = { scan: "SCAN", verify: "VERIFY", execute: "EXECUTE", limits: "EXECUTE · limits", exit: "EXIT" };
+
+function DeskPanels({ p, D, now }: { p: Performance; D: DeskInfo; now: number }) {
+  const r = D.report;
+  const c = D.config;
+  const hardSkips = Math.max(0, r.verified - r.passed_hard);
+  const grokSkips = Math.max(0, r.passed_hard - r.fills);
+  const positions = (p.positions ?? []) as unknown as DeskPosition[];
+  const funnel: [string, number, string][] = [
+    ["SCAN · leads", r.leads, "fresh Solana pairs from DexScreener's newest profiles and boosts, 12 per run"],
+    ["VERIFY · checked", r.verified, "each token once: a skip is final"],
+    ["VERIFY · passed every hard check", r.passed_hard, "pool, LP lock, dev, top 10, authorities, Rugcheck score, age, sells"],
+    ["VERIFY · Grok said GO on X", r.fills, `confidence ≥ ${c.min_x_confidence}`],
+    ["EXECUTE · paper fills", r.fills, `${Math.round(c.size_pct * 100)}% of cash, $${c.min_ticket}-$${c.max_ticket}, ≤ ${c.skip_if.max_ticket_share * 100}% of the pool`],
+    ["EXIT · sells", r.closes, "stop, ladder, trail, time stop, liquidity pull"],
+  ];
+  const top = Math.max(1, r.leads);
+  return (
+    <>
+      <section className="panel">
+        <h2>Strategy 34 <span className="panel__hint">Grok Desk · SCAN → VERIFY → EXECUTE → EXIT · paper · own {usd(c.start_balance, false)}</span></h2>
+        <p className="strategy__what">
+          0xTimQ&apos;s desk, built inside the bot. Each trade goes through four steps, and a different agent handles each
+          one. Four scanners take turns finding fresh Solana pairs, and they never judge a coin. VERIFY then checks the
+          facts in code, for free: pool size, LP lock, how much the dev holds, the top 10 holders, open mint or freeze
+          authority, Rugcheck&apos;s score, age and whether anyone has sold. A missing number counts as a skip. Only a coin
+          that passes all of that costs a Grok call. Grok searches X for copycat tickers, bought hype, who posted first
+          and whether the dev rugged before. Unsure, zero posts, or no X search all mean skip. EXECUTE sizes the buy
+          from the cash the desk has now, so wins grow the next ticket and losses shrink it. EXIT&apos;s rules exist
+          before the entry. Most tasks end in a skip, and that is the desk working.
+        </p>
+        <div className="rules">
+          <span className="rule">liquidity ≥ ${num(c.skip_if.min_liquidity_usd, 0)}</span>
+          <span className="rule">LP locked ≥ {c.skip_if.min_lp_locked_pct}%</span>
+          <span className="rule">dev ≤ {c.skip_if.max_dev_pct}%</span>
+          <span className="rule">top 10 ≤ {c.skip_if.max_top10_pct}%</span>
+          <span className="rule">Rugcheck score ≤ {c.skip_if.max_risk_score}</span>
+          <span className="rule">age {c.skip_if.min_age_min} min - {c.skip_if.max_age_h} h</span>
+          <span className="rule rule--loss">stop {c.exit.hard_stop_pct}%</span>
+          <span className="rule rule--gain">{c.exit.ladder.map(([a, f]) => `+${a}% sells ${Math.round(f * 100)}%`).join(" · ")}</span>
+          <span className="rule">trail {c.exit.trail_pct}% under the peak</span>
+          <span className="rule">{c.exit.time_stop_min} min without +{c.exit.time_stop_min_pct}% → out</span>
+          <span className="rule rule--loss">pool −{c.exit.liq_drop_pct}% → out</span>
+          <span className="rule">max {c.max_open} open · halt at −{c.session_loss_halt_pct}% on the day</span>
+        </div>
+        <p className="muted">
+          Grok: {D.grok.via} · {D.grok.calls_last_hour}/{D.grok.budget_per_hour} calls this hour
+          {D.grok.calls !== null ? ` · ${D.grok.searched ?? 0} searched X, ${D.grok.no_search ?? 0} answered without searching (skipped)` : ""}
+          {D.grok.errors ? ` · ${D.grok.errors} errors (last: ${D.grok.last_error})` : ""}
+          {Object.keys(D.source_errors).length ? ` · source errors: ${Object.entries(D.source_errors).map(([k, v]) => `${k} ${v}`).join(", ")}` : ""}
+          {D.session.halted ? ` · ⛔ session halted: equity under ${usd(D.session.halt_at)} today` : ""}
+        </p>
+      </section>
+
+      <div className="grid2">
+        <section className="panel">
+          <h2>The funnel <span className="panel__hint">tasks against fills: most of it should be skips</span></h2>
+          <div className="moon-bars">
+            {funnel.map(([label, n, hint]) => (
+              <div key={label} className="moon-bar" style={{ gridTemplateColumns: "220px 1fr 60px" }} title={hint}>
+                <span>{label}</span>
+                <div className="moon-bar__track"><div className="moon-bar__fill" style={{ width: `${Math.max(n ? 1.5 : 0, (n / top) * 100)}%` }} /></div>
+                <span>{n}</span>
+              </div>
+            ))}
+          </div>
+          <p className="muted">{hardSkips} killed by a hard check, {grokSkips} turned down by Grok, {r.tasks} tasks logged in all.</p>
+          <h2 style={{ marginTop: 14 }}>Top skip reasons</h2>
+          <table>
+            <tbody>
+              {r.skip_reasons.length === 0 && <tr><td className="muted">no skips yet</td></tr>}
+              {r.skip_reasons.slice(0, 10).map(([k, n]) => <tr key={k}><td>{k}</td><td className="r">{n}</td></tr>)}
+            </tbody>
+          </table>
+        </section>
+
+        <section className="panel">
+          <h2>Session report <span className="panel__hint">every number from tasks.csv and trades.csv · saved daily at 22:00 UTC</span></h2>
+          <pre className="desk-report">{D.report_text}</pre>
+          <h2 style={{ marginTop: 14 }}>Whose leads paid</h2>
+          <table>
+            <thead><tr><th>Agent</th><th className="r">Leads</th><th className="r">Fills</th><th className="r">Realized</th></tr></thead>
+            <tbody>
+              {c.scanners.map((a) => {
+                const x = r.agents[a] ?? { leads: 0, fills: 0, pnl: 0 };
+                return <tr key={a}><td>{a}</td><td className="r">{x.leads}</td><td className="r">{x.fills}</td><td className="r"><Pol v={x.pnl}>{signedUsd(x.pnl)}</Pol></td></tr>;
+              })}
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <section className="panel">
+        <h2>Open positions and their exits <span className="panel__hint">every exit exists before the entry</span></h2>
+        {positions.length === 0 ? <p className="empty">Flat: nothing has passed every step yet.</p> : (
+          <table>
+            <thead><tr><th>Coin</th><th>Lead</th><th className="r">In</th><th className="r">Move</th><th className="r">Stop</th><th className="r">Next take</th><th className="r">Trail</th><th className="r">Pool floor</th><th className="r">Time stop</th></tr></thead>
+            <tbody>
+              {positions.map((o) => (
+                <tr key={o.mint}>
+                  <td className="coin">{o.url ? <a href={o.url} target="_blank" rel="noreferrer">{o.coin}</a> : o.coin}</td>
+                  <td className="muted">{o.agent}</td>
+                  <td className="r">{usd(o.cost)}</td>
+                  <td className="r"><Pol v={o.unrealized}>{pct(o.unrealized_pct, 1, true)}</Pol></td>
+                  <td className="r">{price(o.stop_px)}</td>
+                  <td className="r">{o.next_take_px ? price(o.next_take_px) : "ladder done"}</td>
+                  <td className="r">{o.trail_px ? price(o.trail_px) : "after 1st take"}</td>
+                  <td className="r">${num(o.liq_floor, 0)}</td>
+                  <td className="r">{o.time_stop_ms ? (o.time_stop_ms > now ? `in ${Math.round((o.time_stop_ms - now) / 60000)} min` : "due") : "off (took profit)"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section className="panel">
+        <h2>Every task <span className="panel__hint">newest first · if it isn&apos;t in tasks.csv, it didn&apos;t happen</span></h2>
+        <table>
+          <thead><tr><th>When</th><th>Agent</th><th>Step</th><th>Coin</th><th>Result</th><th>Why</th></tr></thead>
+          <tbody>
+            {D.tasks.length === 0 && <tr><td colSpan={6} className="muted">the first scan runs within 5 minutes of a restart</td></tr>}
+            {D.tasks.slice(0, 40).map((t, i) => (
+              <tr key={`${t.ts}-${i}`}>
+                <td className="muted">{ago(Number(t.ts), now)}</td>
+                <td>{t.agent}</td>
+                <td className="muted">{DESK_STEP[t.step] ?? t.step}</td>
+                <td className="coin">{t.symbol || t.mint.slice(0, 6)}</td>
+                <td>{t.result === "paper_fill" || t.result === "go" ? <span className="pol pol--gain">{t.result}</span>
+                  : t.result === "skip" ? <span className="pol pol--loss">skip</span> : t.result}</td>
+                <td className="why" title={t.reason}>{t.reason}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    </>
+  );
 }
 
 // =============================================================================================
@@ -329,6 +483,52 @@ function JevABPanel({ p, now }: { p: Performance; now: number }) {
           <tr><td><b>With the Jev gate</b></td><td className="r"><Pol v={c.gated_pnl}>{signedUsd(c.gated_pnl)}</Pol></td><td></td></tr>
         </tbody>
       </table>
+    </section>
+  );
+}
+
+// =============================================================================================
+// Copy Desk x CrawlHive + LarpCheck: every copy tagged with the two tools' opinion, P&L split PASS / FAIL / NONE
+// =============================================================================================
+type CopyHiveAB = { by_class: Record<string, number>; booked: Record<string, number>; control_pnl: number;
+  gated_pnl: number; gated_lenient_pnl: number; calls_window: number; budget: number; rule: string;
+  open: { key: string; symbol: string; chain: string | null; class: string; why: string; hive_url: string | null; larp_url: string | null }[] };
+
+const HIVE_CLASS: Record<string, string> = { PASS: "both tools pass", FAIL: "flagged (CrawlHive < 60 or LarpCheck larp/scam)", NONE: "no answer / too early" };
+
+function HiveABPanel({ p }: { p: Performance }) {
+  const h = (p.sniper as unknown as { copy?: { hive_ab?: CopyHiveAB | null } } | undefined)?.copy?.hive_ab;
+  if (!h) return null;
+  return (
+    <section className="panel">
+      <h2>CrawlHive + LarpCheck second opinion <span className="panel__hint">every copy tagged · P&amp;L split by their verdict · free scan, {h.calls_window}/{h.budget} used this 10 min</span></h2>
+      <p className="strategy__what">
+        Right before a copy is booked, CrawlHive scans the coin (holders, bundles, snipers, dev history, LP) and passes
+        along LarpCheck&apos;s verdict on the project when it has one. The copy is booked either way, so this table shows
+        what skipping the coins they flag would have earned. CrawlHive&apos;s own record over 3,383 scans: 46% of CLEAN
+        coins dumped within 24 h, against 78% of RISKY and 92% of TOO EARLY.
+      </p>
+      <div className="rules"><span className="rule rule--gain">{h.rule}</span><span className="rule rule--loss">tag only: nothing is blocked</span></div>
+      <table>
+        <thead><tr><th>Their verdict</th><th className="r">Copies</th><th className="r">Realized P&amp;L</th></tr></thead>
+        <tbody>
+          {["PASS", "FAIL", "NONE"].map((v) => (
+            <tr key={v}><td>{HIVE_CLASS[v]}</td><td className="r">{h.booked[v] ?? 0}</td><td className="r"><Pol v={h.by_class[v] ?? 0}>{signedUsd(h.by_class[v] ?? 0)}</Pol></td></tr>
+          ))}
+          <tr><td>All tagged copies (what the book did)</td><td></td><td className="r"><Pol v={h.control_pnl}>{signedUsd(h.control_pnl)}</Pol></td></tr>
+          <tr><td><b>Only copies both tools passed</b></td><td></td><td className="r"><b><Pol v={h.gated_pnl}>{signedUsd(h.gated_pnl)}</Pol></b></td></tr>
+          <tr><td>Passed + no answer</td><td></td><td className="r"><Pol v={h.gated_lenient_pnl}>{signedUsd(h.gated_lenient_pnl)}</Pol></td></tr>
+        </tbody>
+      </table>
+      {h.open.length > 0 && (
+        <p className="muted">
+          Open copies: {h.open.map((o, i) => (
+            <span key={o.key}>{i ? " · " : ""}{o.symbol} ({o.chain}) {o.class}: {o.why}
+              {o.hive_url && <> · <a href={o.hive_url} target="_blank" rel="noreferrer">scan</a></>}
+              {o.larp_url && <> · <a href={o.larp_url} target="_blank" rel="noreferrer">larpcheck</a></>}</span>
+          ))}
+        </p>
+      )}
     </section>
   );
 }
@@ -647,6 +847,76 @@ const GATE_LABEL: Record<string, string> = {
   danger: "danger flag", risk_score: "risk score > limit", top10: "top-10 holders too big",
   lp_unlocked: "LP not locked", insiders: "insider network",
 };
+
+const HIVE_LABEL: Record<string, string> = {
+  passed: "passed both → bought", no_answer: "no CrawlHive answer (down / rate limit)", no_score: "CrawlHive gave no score",
+  hive_risky: "CrawlHive RISKY (score 40-59)", hive_danger: "CrawlHive DANGER (score < 40)",
+  "larp:scam": "LarpCheck: SCAM", "larp:larp": "LarpCheck: LARP", "larp:likely_larp": "LarpCheck: LIKELY LARP",
+  authority_open: "mint / freeze authority open",
+};
+const BOTH_LABEL: Record<string, string> = {
+  "hive_ok+larp_none": "CrawlHive OK · LarpCheck has no check", "hive_ok+larp_real": "both say real / OK",
+  "hive_ok+larp_unclear": "CrawlHive OK · LarpCheck unclear", "hive_ok+larp_bad": "CrawlHive OK · LarpCheck says larp/scam",
+  "hive_bad+larp_none": "CrawlHive risky · LarpCheck has no check", "hive_bad+larp_real": "CrawlHive risky · LarpCheck says real",
+  "hive_bad+larp_unclear": "CrawlHive risky · LarpCheck unclear", "hive_bad+larp_bad": "both say no",
+};
+
+function HiveGatePanel({ p, m, g }: { p: Performance; m: MetaInfo; g: HiveGate }) {
+  const c = m.config;
+  const r = g.rules;
+  const total = Object.values(g.counts).reduce((a, b) => a + b, 0);
+  const rows = Object.entries(g.counts).sort((a, b) => (a[0] === "passed" ? -1 : b[0] === "passed" ? 1 : b[1] - a[1]));
+  const both = Object.entries(g.both ?? {}).sort((a, b) => b[1] - a[1]);
+  const bothTotal = both.reduce((a, [, v]) => a + v, 0);
+  return (
+    <section className="panel">
+      <h2>Strategy 33 <span className="panel__hint">Hive Gate · CrawlHive + LarpCheck · paper · own {usd(c.start_balance, false)}</span></h2>
+      <p className="strategy__what">
+        Two independent tools judge every coin before a buy. It watches the same new Solana and Base memecoins as
+        Strategy 12 (a description, website or X link, {compactUsd(c.min_mc)}-{compactUsd(c.max_entry_mc)} market cap,{" "}
+        {fmtAge(30)}+ old, pool of at least {compactUsd(c.min_liquidity)}). CrawlHive (open source) scans the chain:
+        holders, bundles, snipers, the dev&apos;s history, linked wallets, LP lock. It gives a 0-100 score, and the coin
+        needs CLEAN or OK ({r.min_hive_score}+). LarpCheck&apos;s second opinion on the project behind the coin comes back in
+        the same answer, and a verdict of {r.larp_block.join(", ")} kills the coin. Most fresh coins have no LarpCheck check
+        at all, and then CrawlHive decides alone. Too early to judge means it waits and asks again. No answer is a skip,
+        never a pass. Survivors get a flat {usd(g.ticket_usd, false)} ticket, with at most {g.max_open} coins held and an
+        hour between entries. Exits: a {pct(r.stop_loss, 0, true)} stop, then half sold at {pct(r.take_half_at, 0, true)},
+        and the rest trails the peak.
+      </p>
+      <div className="rules">
+        <span className="rule">CrawlHive ≥ {r.min_hive_score}</span>
+        <span className="rule rule--loss">LarpCheck ≠ larp / scam</span>
+        <span className="rule">flat {usd(g.ticket_usd, false)} · max {g.max_open}</span>
+        <span className="rule">≤ {r.max_hive_calls} scans / {r.hive_window_min} min</span>
+        <span className="rule rule--loss">stop {pct(r.stop_loss, 0, true)}</span>
+        <span className="rule rule--gain">half off at {pct(r.take_half_at, 0, true)}</span>
+      </div>
+      <p className="empty">
+        Neither tool keeps point-in-time history, so there is no backtest; this paper book is the test. Strategy 12 buys
+        the same coins without a gate, and Strategy 23 puts Rugcheck in front of them. A clean scan is not a guarantee.
+      </p>
+      <table>
+        <thead><tr><th>Gate verdict (since launch)</th><th className="r">Coins</th><th className="r">Share</th></tr></thead>
+        <tbody>
+          {rows.length === 0 && <tr><td colSpan={3} className="muted">no coin checked yet</td></tr>}
+          {rows.map(([k, v]) => (
+            <tr key={k}><td>{HIVE_LABEL[k] ?? k}</td><td className="r">{v}</td><td className="r">{pct(total ? v / total : 0, 0)}</td></tr>
+          ))}
+        </tbody>
+      </table>
+      <table>
+        <thead><tr><th>Do the two tools agree?</th><th className="r">Coins</th><th className="r">Share</th></tr></thead>
+        <tbody>
+          {both.length === 0 && <tr><td colSpan={3} className="muted">no verdict yet</td></tr>}
+          {both.map(([k, v]) => (
+            <tr key={k}><td>{BOTH_LABEL[k] ?? k}</td><td className="r">{v}</td><td className="r">{pct(bothTotal ? v / bothTotal : 0, 0)}</td></tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="muted">{p.status.decider}</p>
+    </section>
+  );
+}
 
 function RugGatePanel({ p, m, g }: { p: Performance; m: MetaInfo; g: NonNullable<MetaInfo["gate"]> }) {
   const c = m.config;
@@ -968,8 +1238,9 @@ function MetaPanels({ p, m, now }: { p: Performance; m: MetaInfo; now: number })
   return (
     <>
       {m.mode === "rug" && m.gate && <RugGatePanel p={p} m={m} g={m.gate} />}
+      {m.mode === "hive" && m.gate && <HiveGatePanel p={p} m={m} g={m.gate as unknown as HiveGate} />}
       {(m.mode as string) === "copy" && (m as unknown as CopyInfo).copy && <CopyDeskPanels p={p} m={m} c={(m as unknown as CopyInfo).copy as CopyBlock} now={now} />}
-      <section className="panel" style={m.mode === "rug" || (m.mode as string) === "copy" ? { display: "none" } : undefined}>
+      <section className="panel" style={m.mode === "rug" || m.mode === "hive" || (m.mode as string) === "copy" ? { display: "none" } : undefined}>
         <h2>Strategy 12 <span className="panel__hint">{p.status.decider} · paper · own {usd(c.start_balance, false)}</span></h2>
         <p className="strategy__what">
           New memecoins whose teams have already put up a description, a website or an X account (DexScreener&apos;s
@@ -1323,6 +1594,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const isSniper = slideKey === "sniper";
   const isKalshi = slideKey === "kalshi";
   const isRug = slideKey === "rugsniper";
+  const isHive = slideKey === "hivesniper";
   const isCopy = slideKey === "copydesk";
   const isLot = slideKey === "lotladder";
   const lotPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.lotladder;
@@ -1330,15 +1602,19 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const isMoon = slideKey === "moonshot";
   const moonPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.moonshot;
   const moonInfo = (moonPerf as unknown as { moonshot?: MoonInfo } | undefined)?.moonshot;
-  const isMeta = slideKey === "metasniper" || isRug || isCopy;
+  const isDesk = slideKey === "grokdesk";
+  const deskPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.grokdesk;
+  const deskInfo = (deskPerf as unknown as { desk?: DeskInfo } | undefined)?.desk;
+  const isMeta = slideKey === "metasniper" || isRug || isHive || isCopy;
   const metaPerf = data.perf.strategies?.metasniper;
   const rugPerf = data.perf.strategies?.rugsniper;
+  const hivePerf = data.perf.strategies?.hivesniper;
   const copyPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.copydesk;
   const kalshiPerf = data.perf.strategies?.kalshi;
   const ideaPerf = slideKey.startsWith("idea:") ? data.perf.strategies?.[slideKey as `idea:${string}`] : undefined;
   const idea = ideaPerf?.idea;
   const isIdea = !!(ideaPerf && idea);
-  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isRug && rugPerf ? rugPerf : isCopy && copyPerf ? copyPerf : isLot && lotPerf ? lotPerf : isMoon && moonPerf ? moonPerf : isMeta && metaPerf ? metaPerf
+  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isRug && rugPerf ? rugPerf : isHive && hivePerf ? hivePerf : isCopy && copyPerf ? copyPerf : isLot && lotPerf ? lotPerf : isMoon && moonPerf ? moonPerf : isDesk && deskPerf ? deskPerf : isMeta && metaPerf ? metaPerf
     : isIdea ? (ideaPerf as Performance) : data.perf;
   const meta = isMeta && p.sniper ? (p.sniper as unknown as MetaInfo) : undefined;
   const kal = isKalshi ? p.kalshi : undefined;
@@ -1387,10 +1663,12 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             {isSniper
               ? "paper trading · Solana DEX memecoins · DexScreener radar"
               : isKalshi ? "paper trading · Kalshi prediction markets · public order books + trade tape"
+              : isDesk ? "paper trading · Solana memecoins · four agents, four steps: scan, verify (code, then Grok on X), execute, exit"
               : isMoon ? "paper trading · Papertrade's rules (papertrade.xyz) on live Hyperliquid BTC · $100 tries, counted"
               : isLot ? "paper trading · OKX spot · Rob's STRAFE HELM lot engine (run #5 rules) on live prices"
               : isCopy ? "paper trading · copy trading · fomo's top wallets on Solana, Robinhood Chain and Base → hard facts → Grok verdict"
               : isRug ? "paper trading · Solana memecoins · DexScreener profiles behind Rugcheck's fact checks"
+              : isHive ? "paper trading · Solana + Base memecoins · DexScreener profiles behind CrawlHive's scan + LarpCheck's second opinion"
               : isMeta ? "paper trading · Solana + Base memecoins · DexScreener profiles (description, website or X)"
               : isIdea ? `paper trading · idea lab · ${idea?.venue ?? "hyperliquid"}`
               : `paper trading · Hyperliquid perps · decisions by ${p.status.decider ?? (p.status.jev === "jev" ? "Jev" : "mock Jev")}`}
@@ -1412,9 +1690,11 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : s.key === "kalshi" ? (kalshiPerf?.equity ?? null)
           : s.key === "metasniper" ? (metaPerf?.equity ?? null)
           : s.key === "rugsniper" ? (rugPerf?.equity ?? null)
+          : s.key === "hivesniper" ? (hivePerf?.equity ?? null)
           : s.key === "copydesk" ? (copyPerf?.equity ?? null)
           : s.key === "lotladder" ? (lotPerf?.equity ?? null)
           : s.key === "moonshot" ? null
+          : s.key === "grokdesk" ? (deskPerf?.equity ?? null)
             : data.perf.strategies?.[s.key as `idea:${string}`]?.equity ?? null)} />
 
       <div key={slideKey} className={`slide slide--from-${dir}`}>
@@ -1442,7 +1722,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
                 </div>
               </>
             ) : (<>
-            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isRug ? "Strategy 23 paper equity" : isCopy ? "Strategy 25 paper equity" : isLot ? "Strategy 26 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
+            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isRug ? "Strategy 23 paper equity" : isHive ? "Strategy 33 paper equity" : isDesk ? "Strategy 34 paper equity" : isCopy ? "Strategy 25 paper equity" : isLot ? "Strategy 26 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
             <div className="hero__equity">{usd(p.equity)}</div>
             <div className="hero__pnl">
               <Pol v={p.pnl}>{arrow(p.pnl)} {signedUsd(p.pnl)} ({pct(p.pnl_pct, 2, true)})</Pol>
@@ -1457,6 +1737,14 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               <span><i className="swatch swatch--zone" /> snipe zone</span>
               <span><i className="swatch swatch--reject" /> rejected</span>
               <span className="legend__note">x: pair age · y: 5-minute move · depth: buy pressure · size: liquidity · lines link nearest neighbours · drag to orbit, hover a token</span>
+            </div>
+          ) : isDesk ? (
+            <div className="legend" aria-label="Legend">
+              <span><i className="swatch swatch--carry-low" /> lead from a scanner</span>
+              <span><i className="swatch swatch--loss" /> killed by a hard check</span>
+              <span><i className="swatch swatch--held" /> Grok&apos;s X read said no</span>
+              <span><i className="swatch swatch--gain" /> filled · open position</span>
+              <span className="legend__note">one rail, left to right: SCAN-1..4 → VERIFY in code → Grok on X → EXECUTE → EXIT · each bead is a recent lead and stops where its task ended · over EXIT: open positions at the height of their move, red plate = −25% stop, gold rungs = +40% / +100% takes · hover a bead or a position</span>
             </div>
           ) : isMoon ? (
             <div className="legend" aria-label="Legend">
@@ -1551,10 +1839,12 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
       <section className={`scene ${isSniper ? "scene--sniper" : isIdea || isKalshi || isMeta ? "scene--idea" : ""}`}
         aria-label={isSniper ? "3D cluster map of Solana pairs the sniper is tracking"
           : isKalshi ? "3D order-book towers for the Kalshi markets the scalper works"
+          : isDesk ? "3D trading desk rail: every recent lead riding from its scanner to the step where it ended"
           : isMoon ? "3D launch towers: each lane's $100 try climbing log-scale rungs toward $1M, with its bust and take-profit levels"
           : isLot ? "3D lot elevator: every coin's $50 lots at their entry prices around the live price"
           : isCopy ? "3D relay of fomo traders' buys flying through the Rugcheck and Grok gates"
           : isRug ? "3D market-cap elevator of the Solana memecoins Rugcheck let through"
+          : isHive ? "3D market-cap elevator of the Solana and Base memecoins CrawlHive and LarpCheck let through"
           : isMeta ? "3D market-cap elevator of new memecoins with metadata, Solana and Base"
           : isIdea ? `3D view for strategy ${idea?.n}: ${p.scene?.title ?? idea?.name}`
             : "3D view of the equity curve and per-coin P&L"}>
@@ -1572,8 +1862,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           </div>
         )}
         {visited.metasniper && metaPerf?.sniper && (
-          <div className={`scene__layer ${isMeta && !isRug && !isCopy ? "scene__layer--on" : ""}`} aria-hidden={!(isMeta && !isRug && !isCopy)}>
-            <MetaScene info={metaPerf.sniper as unknown as MetaInfo} active={isMeta && !isRug && !isCopy} />
+          <div className={`scene__layer ${isMeta && !isRug && !isHive && !isCopy ? "scene__layer--on" : ""}`} aria-hidden={!(isMeta && !isRug && !isHive && !isCopy)}>
+            <MetaScene info={metaPerf.sniper as unknown as MetaInfo} active={isMeta && !isRug && !isHive && !isCopy} />
           </div>
         )}
         {visited.rugsniper && rugPerf?.sniper && (
@@ -1581,9 +1871,19 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             <MetaScene info={rugPerf.sniper as unknown as MetaInfo} active={isRug} />
           </div>
         )}
+        {visited.hivesniper && hivePerf?.sniper && (
+          <div className={`scene__layer ${isHive ? "scene__layer--on" : ""}`} aria-hidden={!isHive}>
+            <MetaScene info={hivePerf.sniper as unknown as MetaInfo} active={isHive} />
+          </div>
+        )}
         {visited.lotladder && lotInfo && (
           <div className={`scene__layer ${isLot ? "scene__layer--on" : ""}`} aria-hidden={!isLot}>
             <LotScene info={lotInfo} active={isLot} />
+          </div>
+        )}
+        {visited.grokdesk && deskInfo && (
+          <div className={`scene__layer ${isDesk ? "scene__layer--on" : ""}`} aria-hidden={!isDesk}>
+            <DeskScene info={deskInfo} positions={(deskPerf?.positions ?? []) as unknown as DeskPosition[]} active={isDesk} />
           </div>
         )}
         {visited.moonshot && moonInfo && (
@@ -1629,10 +1929,13 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
 
         <JevABPanel p={p} now={now} />
 
+        {isCopy && <HiveABPanel p={p} />}
+
         {isSniper && sn ? <SniperPanels p={p} sn={sn} demo={sniperDemo} now={now} />
           : isKalshi && kal ? <KalshiPanels k={kal} now={now} />
           : isLot && lotInfo ? <LotPanels p={p} L={lotInfo} now={now} />
           : isMeta && meta ? <MetaPanels p={p} m={meta} now={now} />
+          : isDesk && deskInfo ? <DeskPanels p={p} D={deskInfo} now={now} />
           : isIdea && idea ? <IdeaPanels p={p} idea={idea} /> : <TrendPanels p={p} />}
 
         </>)}
@@ -1780,7 +2083,9 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         </>)}
 
         <footer className="foot">
-          {isMoon
+          {isDesk
+            ? "Paper trading only — the desk never holds a key, never connects a wallet and never signs. Fills are simulated against the real DexScreener pool: AMM price impact, 0.25% DEX fee, $0.10 priority fee and 2% latency slippage, so a paper fill is a ceiling, not a forecast. Most memecoins go to zero. Not investment advice."
+            : isMoon
             ? "Paper trading only — nothing is sent to Papertrade and no wallet is connected. Papertrade's published rules (BBO mid pricing, bust 5 bp before zero equity, win haircut and 2% win fee, $10M cap) are replayed against Hyperliquid's live BTC book. Prices are checked once a second, so a real fill could land a little differently. Real money at 100x-1000x is lost far more often than it is multiplied. Not investment advice."
             : isKalshi
             ? "Paper trading only — Kalshi orders are simulated against the public order books and trade tape with Kalshi's fee schedule; nothing is sent to Kalshi. Not investment advice."
@@ -1790,6 +2095,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             ? "Paper trading only — no order is sent to OKX. Lots are simulated against OKX's live best bid/ask: taker buys at the ask + 0.05% with a 0.35% fee, maker sells fill when the bid reaches the target, 0.20% fee. Never-loss means losses sit in held lots: equity marks every bag at the bid. Not investment advice."
             : isCopy
             ? "Paper trading only — no copyfomo, no Telegram, no real order. Leader wallets are read from public Solana transactions; our copies are simulated swaps priced from real DexScreener pool data with AMM price impact, DEX fee, priority fee and latency slippage. fomo's board is an unofficial public feed. Most copy traders lose money. Not investment advice."
+            : isHive
+            ? "Paper trading only — simulated Solana/Base swaps priced from real DexScreener pool data with AMM price impact, DEX fee, gas/priority fee and latency slippage. CrawlHive's scan and LarpCheck's verdict are opinions, not guarantees: a coin both pass can still go to zero. Not investment advice."
             : isRug
             ? "Paper trading only — simulated Solana swaps priced from real DexScreener pool data with AMM price impact, DEX fee, priority fee and latency slippage. Rugcheck's report is a fact filter, not a guarantee: a coin that passes can still go to zero. Not investment advice."
             : isMeta
