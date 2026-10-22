@@ -8,6 +8,7 @@ import type { CopyBlock, CopyInfo } from "./CopyScene";
 import type { LotInfo } from "./LotScene";
 import { reachedAtLeast, type MoonInfo } from "./MoonshotScene";
 import type { DeskInfo, DeskPosition, TrenchInfo } from "./DeskScene";
+import type { OneInfo } from "./OneCoinScene";
 import { ago, arrow, num, pct, polarity, price, signedUsd, usd, when } from "@/lib/format";
 import type { HiveGate, IdeaInfo, KalshiInfo, MetaInfo, Performance, PerfResponse, RadarItem, SniperInfo } from "@/lib/types";
 
@@ -35,6 +36,7 @@ const CopyScene = dynamic(() => import("./CopyScene"), { ssr: false });
 const LotScene = dynamic(() => import("./LotScene"), { ssr: false });
 const MoonshotScene = dynamic(() => import("./MoonshotScene"), { ssr: false });
 const DeskScene = dynamic(() => import("./DeskScene"), { ssr: false });
+const OneCoinScene = dynamic(() => import("./OneCoinScene"), { ssr: false });
 const IdeaScene = dynamic(() => import("./IdeaScene"), {
   ssr: false,
   loading: () => <div className="scene-loading">Raising the landscape…</div>,
@@ -104,11 +106,129 @@ function buildSlides(perf: Performance): Slide[] {
     ? [{ key: "trenchkit", n: 36, name: "Trench Kit",
         blurb: "the trencher's 13 free tools as code · Rugcheck insiders, trench.bot bundles, dev wallet, kolscan KOLs, GeckoTerminal flow · short confirm: holders must grow · −30% stop, half at +60%, 30% trail · no trade for an hour → the best near-miss · paper, own $10k" }]
     : [];
-  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...hive, ...copy, ...lot, ...moon, ...desk, ...trench];
+  const onePerf = (perf.strategies as Record<string, Performance | undefined> | undefined)?.onecoin;
+  const one: Slide[] = (onePerf as unknown as { onecoin?: unknown } | undefined)?.onecoin
+    ? [{ key: "onecoin", n: 38, name: "One Coin",
+        blurb: "buy the Hyperliquid coin that is rising, hold it until it should be dropped or it is peaking · one coin at a time, all in, 1x · −7% or a broken trend drops it · 3.5% back from the top or a cooled RSI means peaking · $10k rounds: under $5k → new round, different coin" }]
+    : [];
+  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...hive, ...copy, ...lot, ...moon, ...desk, ...trench, ...one];
 }
 
 function Pol({ v, children }: { v: number; children: React.ReactNode }) {
   return <span className={`pol pol--${polarity(v)}`}>{children}</span>;
+}
+
+// =============================================================================================
+// Strategy 38 panels (One Coin): the coin held and its exits, the field, the rounds, every trade
+// =============================================================================================
+const pctS = (x: number | null | undefined, d = 1) => (x === null || x === undefined ? "—" : `${x >= 0 ? "+" : ""}${x.toFixed(d)}%`);
+
+function OnePanels({ p, O, now }: { p: Performance; O: OneInfo; now: number }) {
+  const R = O.rules;
+  const h = O.hold;
+  return (
+    <>
+      <section className="panel">
+        <h2>Strategy 38 <span className="panel__hint">One Coin · round {O.round} · {usd(R.start_balance, false)} per round · paper</span></h2>
+        <p className="strategy__what">
+          Buy the coin that is rising and hold it until it should be dropped or it is peaking, one coin at a time. Every
+          minute the book reads Hyperliquid&apos;s coins that trade at least {usd(R.min_volume_usd / 1e6, false)}M a day. A
+          coin is rising when it&apos;s up over 1 hour, 4 hours and 24 hours, its last 15-minute close is above a rising
+          20-bar average, its RSI is under {R.max_rsi_entry} and the last hour is under +{R.max_1h_entry_pct}%. Of those,
+          the strongest 4-hour rise is bought with all of the equity, 1x long. It&apos;s dropped at −{R.stop_pct}% from the
+          entry or when the trend breaks (a 15-minute close under the average while the last hour is down). It&apos;s sold
+          as peaking once it has been up {R.peak_arm_pct}% and gives back {R.peak_giveback_pct}% from the top, or when RSI
+          goes over {R.rsi_hot} and cools back under {R.rsi_cool}. If a round&apos;s equity ever falls under{" "}
+          {usd(R.restart_below, false)}, the round ends and a new one starts with {usd(R.start_balance, false)} on a
+          different coin.
+        </p>
+        <div className="rules">
+          <span className="rule rule--loss">drop it: −{R.stop_pct}% or trend broken</span>
+          <span className="rule rule--gain">peaking: −{R.peak_giveback_pct}% from the top once +{R.peak_arm_pct}%</span>
+          <span className="rule">peaking: RSI over {R.rsi_hot}, back under {R.rsi_cool}</span>
+          <span className="rule">drop it: {R.stale_h} h and not +{R.stale_min_pct}%</span>
+          <span className="rule">no re-buy for {R.rebuy_block_h} h</span>
+          <span className="rule rule--loss">under {usd(R.restart_below, false)} → new {usd(R.start_balance, false)} round, different coin</span>
+        </div>
+        <p className="muted">
+          Put in across {O.round} round{O.round === 1 ? "" : "s"}: {usd(O.put_in, false)} · total P&amp;L{" "}
+          <Pol v={O.total_pnl}>{signedUsd(O.total_pnl)}</Pol>
+          {O.errors ? ` · ${O.errors} data errors (last: ${O.last_error})` : ""}
+        </p>
+      </section>
+
+      <div className="grid2">
+        <section className="panel">
+          <h2>Holding <span className="panel__hint">the one coin and where it gets sold</span></h2>
+          {!h ? <p className="empty">Flat: no coin is rising by every rule right now.</p> : (
+            <table>
+              <tbody>
+                <tr><td>Coin</td><td className="r"><b>{h.coin}</b> since {ago(h.opened, now)}</td></tr>
+                <tr><td>Why it was bought</td><td className="r why">{h.why}</td></tr>
+                <tr><td>Entry → now</td><td className="r">{price(h.entry)} → {price(h.mid)} · <Pol v={h.up_pct}>{pctS(h.up_pct, 2)}</Pol></td></tr>
+                <tr><td>Worth</td><td className="r">{usd(h.value)}{h.funding ? ` · funding ${signedUsd(h.funding)}` : ""}</td></tr>
+                <tr><td>Drop it at (−{R.stop_pct}%)</td><td className="r">{price(h.stop_px)}</td></tr>
+                <tr><td>Highest since the entry</td><td className="r">{price(h.peak)} ({pctS((h.peak / h.entry - 1) * 100, 2)})</td></tr>
+                <tr><td>Peaking exit</td><td className="r">{h.peak_armed ? `armed: sells at ${price(h.giveback_px)}` : `arms at ${price(h.arm_px)} (+${R.peak_arm_pct}%)`}</td></tr>
+                <tr><td>Trend now</td><td className="r">{h.read ? `1h ${pctS(h.read.r1h)} · 4h ${pctS(h.read.r4h)} · RSI ${h.read.rsi?.toFixed(0) ?? "—"}${h.rsi_hot ? " (went over " + R.rsi_hot + ")" : ""} · ${h.read.above_ema ? "above" : "under"} its average` : "—"}</td></tr>
+                <tr><td>Stale check</td><td className="r">{h.stale_ms > now ? `in ${Math.round((h.stale_ms - now) / 3_600_000)} h` : "due"}</td></tr>
+              </tbody>
+            </table>
+          )}
+        </section>
+        <section className="panel">
+          <h2>The field <span className="panel__hint">today&apos;s strongest liquid movers, read every minute while flat</span></h2>
+          <table>
+            <thead><tr><th>Coin</th><th className="r">1 h</th><th className="r">4 h</th><th className="r">24 h</th><th className="r">RSI</th><th>Verdict</th></tr></thead>
+            <tbody>
+              {O.candidates.length === 0 && <tr><td colSpan={6} className="muted">read on the next flat minute</td></tr>}
+              {O.candidates.map((c) => (
+                <tr key={c.coin}>
+                  <td className="coin">{c.coin}</td><td className="r">{pctS(c.r1h)}</td><td className="r">{pctS(c.r4h)}</td><td className="r">{pctS(c.r24h)}</td>
+                  <td className="r">{c.rsi?.toFixed(0) ?? "—"}</td>
+                  <td>{c.rising ? <span className="pol pol--gain">rising</span> : <span className="muted">{c.why}</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <div className="grid2">
+        <section className="panel">
+          <h2>Trades <span className="panel__hint">newest first</span></h2>
+          <table>
+            <thead><tr><th>When</th><th>Rd</th><th>Coin</th><th>Side</th><th className="r">Price</th><th className="r">P&amp;L</th><th>Why</th></tr></thead>
+            <tbody>
+              {O.trades.length === 0 && <tr><td colSpan={7} className="muted">no trade yet</td></tr>}
+              {O.trades.map((t, i) => (
+                <tr key={`${t.time}-${i}`}>
+                  <td className="muted">{t.time.slice(5, 16)}</td><td>{t.round}</td><td className="coin">{t.coin}</td><td>{t.action}</td>
+                  <td className="r">{price(Number(t.price))}</td>
+                  <td className="r">{t.pnl ? <Pol v={Number(t.pnl)}>{signedUsd(Number(t.pnl))}</Pol> : "—"}</td>
+                  <td className="why" title={t.reason}>{t.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+        <section className="panel">
+          <h2>Rounds <span className="panel__hint">each starts with {usd(R.start_balance, false)}; under {usd(R.restart_below, false)} ends it</span></h2>
+          <table>
+            <thead><tr><th>Round</th><th>Started</th><th>Ended</th><th className="r">Ended at</th><th>Lost on</th><th>Coins</th></tr></thead>
+            <tbody>
+              {O.rounds.map((r) => (
+                <tr key={r.round}><td>{r.round}</td><td className="muted">{when(r.start_ms)}</td><td className="muted">{when(r.end_ms)}</td>
+                  <td className="r"><Pol v={r.end_equity - R.start_balance}>{usd(r.end_equity)}</Pol></td><td>{r.lost_on}</td><td className="muted">{r.coins.join(", ")}</td></tr>
+              ))}
+              <tr><td><b>{O.round}</b></td><td className="muted">{when(O.round_start_ms)}</td><td className="muted">running</td>
+                <td className="r"><Pol v={p.equity - R.start_balance}>{usd(p.equity)}</Pol></td><td>—</td><td className="muted">{h?.coin ?? "flat"}</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+    </>
+  );
 }
 
 // =============================================================================================
@@ -1705,6 +1825,9 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const deskPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.grokdesk;
   const deskInfo = (deskPerf as unknown as { desk?: DeskInfo } | undefined)?.desk;
   const isTrench = slideKey === "trenchkit";
+  const isOne = slideKey === "onecoin";
+  const onePerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.onecoin;
+  const oneInfo = (onePerf as unknown as { onecoin?: OneInfo } | undefined)?.onecoin;
   const trenchPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.trenchkit;
   const trenchInfo = (trenchPerf as unknown as { desk?: DeskInfo } | undefined)?.desk;
   const isMeta = slideKey === "metasniper" || isRug || isHive || isCopy;
@@ -1716,7 +1839,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const ideaPerf = slideKey.startsWith("idea:") ? data.perf.strategies?.[slideKey as `idea:${string}`] : undefined;
   const idea = ideaPerf?.idea;
   const isIdea = !!(ideaPerf && idea);
-  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isRug && rugPerf ? rugPerf : isHive && hivePerf ? hivePerf : isCopy && copyPerf ? copyPerf : isLot && lotPerf ? lotPerf : isMoon && moonPerf ? moonPerf : isDesk && deskPerf ? deskPerf : isTrench && trenchPerf ? trenchPerf : isMeta && metaPerf ? metaPerf
+  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isRug && rugPerf ? rugPerf : isHive && hivePerf ? hivePerf : isCopy && copyPerf ? copyPerf : isLot && lotPerf ? lotPerf : isMoon && moonPerf ? moonPerf : isDesk && deskPerf ? deskPerf : isTrench && trenchPerf ? trenchPerf : isOne && onePerf ? onePerf : isMeta && metaPerf ? metaPerf
     : isIdea ? (ideaPerf as Performance) : data.perf;
   const meta = isMeta && p.sniper ? (p.sniper as unknown as MetaInfo) : undefined;
   const kal = isKalshi ? p.kalshi : undefined;
@@ -1765,6 +1888,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             {isSniper
               ? "paper trading · Solana DEX memecoins · DexScreener radar"
               : isKalshi ? "paper trading · Kalshi prediction markets · public order books + trade tape"
+              : isOne ? "paper trading · Hyperliquid · one rising coin at a time, held until it should be dropped or it peaks"
               : isTrench ? "paper trading · Solana memecoins · the trencher's free tools as code, then a 10-minute holder-growth confirm"
               : isDesk ? "paper trading · Solana memecoins · four agents, four steps: scan, verify (code, then Grok on X), execute, exit"
               : isMoon ? "paper trading · Papertrade's rules (papertrade.xyz) on live Hyperliquid BTC · $100 tries, counted"
@@ -1799,6 +1923,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : s.key === "moonshot" ? null
           : s.key === "grokdesk" ? (deskPerf?.equity ?? null)
           : s.key === "trenchkit" ? (trenchPerf?.equity ?? null)
+          : s.key === "onecoin" ? (onePerf?.equity ?? null)
             : data.perf.strategies?.[s.key as `idea:${string}`]?.equity ?? null)} />
 
       <div key={slideKey} className={`slide slide--from-${dir}`}>
@@ -1826,7 +1951,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
                 </div>
               </>
             ) : (<>
-            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isRug ? "Strategy 23 paper equity" : isHive ? "Strategy 33 paper equity" : isDesk ? "Strategy 34 paper equity" : isTrench ? "Strategy 36 paper equity" : isCopy ? "Strategy 25 paper equity" : isLot ? "Strategy 26 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
+            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isRug ? "Strategy 23 paper equity" : isHive ? "Strategy 33 paper equity" : isDesk ? "Strategy 34 paper equity" : isTrench ? "Strategy 36 paper equity" : isOne ? `Strategy 38 · round ${oneInfo?.round ?? 1} equity` : isCopy ? "Strategy 25 paper equity" : isLot ? "Strategy 26 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
             <div className="hero__equity">{usd(p.equity)}</div>
             <div className="hero__pnl">
               <Pol v={p.pnl}>{arrow(p.pnl)} {signedUsd(p.pnl)} ({pct(p.pnl_pct, 2, true)})</Pol>
@@ -1841,6 +1966,15 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               <span><i className="swatch swatch--zone" /> snipe zone</span>
               <span><i className="swatch swatch--reject" /> rejected</span>
               <span className="legend__note">x: pair age · y: 5-minute move · depth: buy pressure · size: liquidity · lines link nearest neighbours · drag to orbit, hover a token</span>
+            </div>
+          ) : isOne ? (
+            <div className="legend" aria-label="Legend">
+              <span><i className="swatch swatch--zone" /> rising by every rule</span>
+              <span><i className="swatch swatch--carry-low" /> not rising (hover for why)</span>
+              <span><i className="swatch swatch--loss" /> −7% stop</span>
+              <span><i className="swatch swatch--held" /> highest price since the entry</span>
+              <span><i className="swatch swatch--gain" /> give-back exit (armed at +4%)</span>
+              <span className="legend__note">ring: today&apos;s strongest liquid Hyperliquid movers, pillar height = 4-hour rise · middle: the one coin held, the orb climbs at the live price from the stop ring past the entry line · right: one red disc per round that fell under $5k · drag to orbit, hover a pillar</span>
             </div>
           ) : isTrench ? (
             <div className="legend" aria-label="Legend">
@@ -1951,6 +2085,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
       <section className={`scene ${isSniper ? "scene--sniper" : isIdea || isKalshi || isMeta ? "scene--idea" : ""}`}
         aria-label={isSniper ? "3D cluster map of Solana pairs the sniper is tracking"
           : isKalshi ? "3D order-book towers for the Kalshi markets the scalper works"
+          : isOne ? "3D field of rising Hyperliquid coins around the one coin held, with its stop, peak and give-back levels"
           : isTrench ? "3D rail: every recent lead riding from GeckoTerminal through the free tools to the confirm"
           : isDesk ? "3D trading desk rail: every recent lead riding from its scanner to the step where it ended"
           : isMoon ? "3D launch towers: each lane's $100 try climbing log-scale rungs toward $1M, with its bust and take-profit levels"
@@ -1992,6 +2127,11 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         {visited.lotladder && lotInfo && (
           <div className={`scene__layer ${isLot ? "scene__layer--on" : ""}`} aria-hidden={!isLot}>
             <LotScene info={lotInfo} active={isLot} />
+          </div>
+        )}
+        {visited.onecoin && oneInfo && (
+          <div className={`scene__layer ${isOne ? "scene__layer--on" : ""}`} aria-hidden={!isOne}>
+            <OneCoinScene info={oneInfo} active={isOne} />
           </div>
         )}
         {visited.trenchkit && trenchInfo && (
@@ -2056,6 +2196,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : isMeta && meta ? <MetaPanels p={p} m={meta} now={now} />
           : isDesk && deskInfo ? <DeskPanels p={p} D={deskInfo} now={now} />
           : isTrench && trenchInfo ? <DeskPanels p={p} D={trenchInfo} now={now} />
+          : isOne && oneInfo ? <OnePanels p={p} O={oneInfo} now={now} />
           : isIdea && idea ? <IdeaPanels p={p} idea={idea} /> : <TrendPanels p={p} />}
 
         </>)}
@@ -2203,7 +2344,9 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         </>)}
 
         <footer className="foot">
-          {isTrench
+          {isOne
+            ? "Paper trading only — no order reaches Hyperliquid. Buys and sells walk Hyperliquid's live order book and pay the 4.5 bp taker fee; funding is paid or received every hour at the exchange's rate. 1x long, no leverage. The total counts every $10k round put in. Not investment advice."
+            : isTrench
             ? "Paper trading only — no key, no wallet, no real order. Fills are simulated against the real DexScreener pool: AMM price impact, 0.25% DEX fee, $0.10 priority fee and 2% latency slippage. The tools are fact filters, not guarantees: a coin that passes all 13 can still go to zero. Not investment advice."
             : isDesk
             ? "Paper trading only — the desk never holds a key, never connects a wallet and never signs. Fills are simulated against the real DexScreener pool: AMM price impact, 0.25% DEX fee, $0.10 priority fee and 2% latency slippage, so a paper fill is a ceiling, not a forecast. Most memecoins go to zero. Not investment advice."
