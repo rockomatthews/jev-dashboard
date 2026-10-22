@@ -97,12 +97,12 @@ function buildSlides(perf: Performance): Slide[] {
   const deskPerf = (perf.strategies as Record<string, Performance | undefined> | undefined)?.grokdesk;
   const desk: Slide[] = (deskPerf as unknown as { desk?: unknown } | undefined)?.desk
     ? [{ key: "grokdesk", n: 34, name: "Grok Desk",
-        blurb: "0xTimQ's desk: SCAN → VERIFY → EXECUTE → EXIT, one agent per step, nobody skips one · hard skips in code (Rugcheck + DexScreener), then Grok reads X · 10% of cash per entry · −25% stop, +40%/+100% ladder, 25% trail, 45-min time stop · paper, own $50" }]
+        blurb: "0xTimQ's desk: SCAN → VERIFY → EXECUTE → EXIT, one agent per step · safety floor + limits in code (Rugcheck, DexScreener, GeckoTerminal), then Grok reads X · 10% of cash per entry · −25% stop, +40%/+100% ladder, 25% trail · no trade for an hour → the best near-miss · paper, own $50" }]
     : [];
   const trenchPerf = (perf.strategies as Record<string, Performance | undefined> | undefined)?.trenchkit;
   const trench: Slide[] = (trenchPerf as unknown as { desk?: unknown } | undefined)?.desk
     ? [{ key: "trenchkit", n: 36, name: "Trench Kit",
-        blurb: "the trencher's 13 free tools as code · Rugcheck insiders, trench.bot bundles, dev wallet, kolscan KOLs, GeckoTerminal flow · 10-minute confirm: holders must grow · −30% stop, half at +60%, 30% trail · paper, own $10k" }]
+        blurb: "the trencher's 13 free tools as code · Rugcheck insiders, trench.bot bundles, dev wallet, kolscan KOLs, GeckoTerminal flow · short confirm: holders must grow · −30% stop, half at +60%, 30% trail · no trade for an hour → the best near-miss · paper, own $10k" }]
     : [];
   return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...hive, ...copy, ...lot, ...moon, ...desk, ...trench];
 }
@@ -114,7 +114,7 @@ function Pol({ v, children }: { v: number; children: React.ReactNode }) {
 // =============================================================================================
 // Strategy 34 panels (Grok Desk): the funnel, the report screen, the agents, the exits, every task
 // =============================================================================================
-const DESK_STEP: Record<string, string> = { scan: "SCAN", verify: "VERIFY", execute: "EXECUTE", limits: "EXECUTE · limits", exit: "EXIT" };
+const DESK_STEP: Record<string, string> = { scan: "SCAN", verify: "VERIFY", watch: "WATCH", execute: "EXECUTE", limits: "EXECUTE · limits", exit: "EXIT", quota: "EXECUTE · hourly quota" };
 
 const TOOL_STATE: Record<string, string> = { used: "pol pol--gain", covered: "pol pol--flat", "not used": "pol pol--loss" };
 
@@ -133,7 +133,11 @@ function TrenchHeader({ p, D, now }: { p: Performance; D: DeskInfo; now: number 
           dev wallet&apos;s age, activity and first funder over your Solana RPC; kolscan&apos;s KOL wallets among the
           holders; and GeckoTerminal&apos;s unique buyers and sellers to catch bot volume. A coin that passes isn&apos;t bought
           yet. It goes on a {R.watch_min}-minute watch, then is checked again. It&apos;s bought only if holders grew by at
-          least {R.min_holder_growth_pct}%, the price held, and the bundles didn&apos;t load up. No Grok, no key, no wallet.
+          least {R.min_holder_growth_pct}%, the price held, and the bundles didn&apos;t load up. Only the safety floor is
+          absolute: a rug, open authorities, a danger flag, unlocked LP, a dev with past rugs, or a pool under
+          ${num(R.floor_liquidity_usd ?? 10000, 0)}. If an hour passes without a buy, the best near-miss of the last two
+          hours (one that passed every tool but the confirm comes first) gets a fresh safety check and is bought.
+          No Grok, no key, no wallet.
         </p>
         <div className="rules">
           <span className="rule">pool ≥ ${num(R.min_liquidity_usd, 0)}</span>
@@ -230,7 +234,9 @@ function DeskPanels({ p, D, now }: { p: Performance; D: DeskInfo; now: number })
           that passes all of that costs a Grok call. Grok searches X for copycat tickers, bought hype, who posted first
           and whether the dev rugged before. Unsure, zero posts, or no X search all mean skip. EXECUTE sizes the buy
           from the cash the desk has now, so wins grow the next ticket and losses shrink it. EXIT&apos;s rules exist
-          before the entry. Most tasks end in a skip, and that is the desk working.
+          before the entry. Since 2026-10-21 the limits are wider and only a safety floor is absolute (a rug, open
+          authorities, a danger flag, unlocked LP, a pool under $10k). If an hour passes without a buy, the coin that
+          came closest (missed at most two limits) gets a fresh safety check and Grok&apos;s X read, and is bought on a GO.
         </p>
         <div className="rules">
           <span className="rule">liquidity ≥ ${num(c.skip_if.min_liquidity_usd, 0)}</span>
