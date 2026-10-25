@@ -9,6 +9,7 @@ import type { LotInfo } from "./LotScene";
 import { reachedAtLeast, type MoonInfo } from "./MoonshotScene";
 import type { DeskInfo, DeskPosition, TrenchInfo } from "./DeskScene";
 import type { OneInfo } from "./OneCoinScene";
+import type { ThetaInfo } from "./ThetaScene";
 import { ago, arrow, num, pct, polarity, price, signedUsd, usd, when } from "@/lib/format";
 import type { HiveGate, IdeaInfo, KalshiInfo, MetaInfo, Performance, PerfResponse, RadarItem, SniperInfo } from "@/lib/types";
 
@@ -37,6 +38,7 @@ const LotScene = dynamic(() => import("./LotScene"), { ssr: false });
 const MoonshotScene = dynamic(() => import("./MoonshotScene"), { ssr: false });
 const DeskScene = dynamic(() => import("./DeskScene"), { ssr: false });
 const OneCoinScene = dynamic(() => import("./OneCoinScene"), { ssr: false });
+const ThetaScene = dynamic(() => import("./ThetaScene"), { ssr: false });
 const IdeaScene = dynamic(() => import("./IdeaScene"), {
   ssr: false,
   loading: () => <div className="scene-loading">Raising the landscape…</div>,
@@ -111,11 +113,96 @@ function buildSlides(perf: Performance): Slide[] {
     ? [{ key: "onecoin", n: 38, name: "One Coin",
         blurb: "buy the Hyperliquid coin that is rising, hold it until it should be dropped or it is peaking · one coin at a time, all in, 1x · −7% or a broken trend drops it · 3.5% back from the top or a cooled RSI means peaking · $10k rounds: under $5k → new round, different coin" }]
     : [];
-  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...hive, ...copy, ...lot, ...moon, ...desk, ...trench, ...one];
+  const thetaPerf = (perf.strategies as Record<string, Performance | undefined> | undefined)?.thetashop;
+  const theta: Slide[] = (thetaPerf as unknown as { theta?: unknown } | undefined)?.theta
+    ? [{ key: "thetashop", n: 41, name: "Theta Shop",
+        blurb: "the only options book · sells a weekly Bitcoin iron condor on Deribit · paid when BTC stays in a range, loss capped the moment it opens · take profit at half the credit, stop at 2x · paper, own $10k" }]
+    : [];
+  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...hive, ...copy, ...lot, ...moon, ...desk, ...trench, ...one, ...theta];
 }
 
 function Pol({ v, children }: { v: number; children: React.ReactNode }) {
   return <span className={`pol pol--${polarity(v)}`}>{children}</span>;
+}
+
+// =============================================================================================
+// Strategy 41 panels (Theta Shop): the open condor, its legs and exits, every finished condor
+// =============================================================================================
+function ThetaPanels({ p, T, now }: { p: Performance; T: ThetaInfo; now: number }) {
+  const R = T.rules;
+  const c = T.condor;
+  const worth = c ? c.credit_usd - (c.close_cost_usd ?? c.credit_usd) : 0;
+  return (
+    <>
+      <section className="panel">
+        <h2>Strategy 41 <span className="panel__hint">Theta Shop · weekly BTC iron condor on Deribit · paper · own {usd(p.start_balance, false)}</span></h2>
+        <p className="strategy__what">
+          Every other book here bets on a direction. This one bets on a range. Each week it sells a Bitcoin put and a call
+          that are about {Math.round(R.short_delta * 100)}% likely to finish in the money, and buys cheaper ones further out
+          (about {Math.round(R.wing_delta * 100)}%) as insurance. That is an iron condor: money comes in on day one, it is
+          kept if Bitcoin ends the week between the two sold strikes, and the most it can lose is fixed by the bought
+          options. The edge is time passing and option buyers overpaying for protection. It risks at most{" "}
+          {Math.round(R.risk_frac * 100)}% of the account per condor, takes profit once it can keep half the credit, stops
+          out at a loss of twice the credit, and otherwise settles at expiry.
+        </p>
+        <div className="rules">
+          <span className="rule">expiry ~{R.target_dte_days} days out</span>
+          <span className="rule">sell ~{Math.round(R.short_delta * 100)} delta · buy ~{Math.round(R.wing_delta * 100)} delta</span>
+          <span className="rule rule--loss">max {Math.round(R.risk_frac * 100)}% of equity at risk</span>
+          <span className="rule rule--gain">take profit at {Math.round(R.take_profit_frac * 100)}% of the credit</span>
+          <span className="rule rule--loss">stop at {R.stop_mult}x the credit</span>
+          <span className="rule">sell at the bid, buy at the ask, Deribit fees</span>
+        </div>
+        {T.skip_reason && !c && <p className="muted">Not open right now: {T.skip_reason}.</p>}
+        {T.errors ? <p className="muted">{T.errors} data errors (last: {T.last_error})</p> : null}
+      </section>
+
+      <div className="grid2">
+        <section className="panel">
+          <h2>The open condor <span className="panel__hint">{c ? `${c.expiry} · ${c.contracts} BTC per leg` : "none"}</span></h2>
+          {!c ? <p className="empty">No condor open.</p> : (
+            <>
+              <table>
+                <thead><tr><th>Leg</th><th>Option</th><th className="r">Price (BTC)</th><th className="r">Delta</th><th className="r">IV</th></tr></thead>
+                <tbody>
+                  {c.legs.map((l) => (
+                    <tr key={l.name}><td>{l.side === "sell" ? <b>{l.role}</b> : l.role}</td><td className="coin">{l.name}</td>
+                      <td className="r">{l.open_btc.toFixed(4)}</td><td className="r">{l.delta?.toFixed(2) ?? "—"}</td><td className="r">{l.iv.toFixed(0)}%</td></tr>
+                  ))}
+                </tbody>
+              </table>
+              <table>
+                <tbody>
+                  <tr><td>Credit taken in</td><td className="r"><Pol v={c.credit_usd}>{usd(c.credit_usd)}</Pol></td></tr>
+                  <tr><td>Kept in full if BTC ends between</td><td className="r">{usd(c.legs[0].strike, false)} and {usd(c.legs[1].strike, false)}</td></tr>
+                  <tr><td>Break-even at expiry</td><td className="r">{usd(c.breakeven[0], false)} / {usd(c.breakeven[1], false)}</td></tr>
+                  <tr><td>Most it can lose</td><td className="r"><Pol v={-c.max_loss_usd}>{usd(c.max_loss_usd)}</Pol></td></tr>
+                  <tr><td>Worth right now</td><td className="r"><Pol v={worth}>{signedUsd(worth)}</Pol>{c.held_past_stop ? " · held to settlement" : ""}</td></tr>
+                  <tr><td>Take profit / stop when closing costs</td><td className="r">{usd(c.take_profit_at)} / {usd(c.stop_at)}</td></tr>
+                  <tr><td>Bitcoin now · at the open</td><td className="r">{usd(T.spot, false)} · {usd(c.open_index, false)}</td></tr>
+                  <tr><td>Expires</td><td className="r">{when(c.expiry_ms)} ({c.days_left.toFixed(1)} days)</td></tr>
+                </tbody>
+              </table>
+            </>
+          )}
+        </section>
+        <section className="panel">
+          <h2>Finished condors <span className="panel__hint">newest first</span></h2>
+          <table>
+            <thead><tr><th>Expiry</th><th>Strikes</th><th className="r">Credit</th><th className="r">P&amp;L</th><th>How it ended</th></tr></thead>
+            <tbody>
+              {T.history.length === 0 && <tr><td colSpan={5} className="muted">the first condor is still open</td></tr>}
+              {T.history.map((h) => (
+                <tr key={`${h.expiry}-${h.opened}`}><td>{h.expiry}</td><td className="muted">{h.strikes.slice(2, 3).concat(h.strikes.slice(0, 2), h.strikes.slice(3)).map((k) => (k / 1000).toFixed(0) + "k").join(" / ")}</td>
+                  <td className="r">{usd(h.credit_usd)}</td><td className="r"><Pol v={h.pnl}>{signedUsd(h.pnl)}</Pol></td><td className="why" title={h.why}>{h.why}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          {T.events.length > 0 && <p className="muted">{T.events.slice(0, 4).join(" · ")}</p>}
+        </section>
+      </div>
+    </>
+  );
 }
 
 // =============================================================================================
@@ -1826,6 +1913,9 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const deskInfo = (deskPerf as unknown as { desk?: DeskInfo } | undefined)?.desk;
   const isTrench = slideKey === "trenchkit";
   const isOne = slideKey === "onecoin";
+  const isTheta = slideKey === "thetashop";
+  const thetaPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.thetashop;
+  const thetaInfo = (thetaPerf as unknown as { theta?: ThetaInfo } | undefined)?.theta;
   const onePerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.onecoin;
   const oneInfo = (onePerf as unknown as { onecoin?: OneInfo } | undefined)?.onecoin;
   const trenchPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.trenchkit;
@@ -1839,7 +1929,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const ideaPerf = slideKey.startsWith("idea:") ? data.perf.strategies?.[slideKey as `idea:${string}`] : undefined;
   const idea = ideaPerf?.idea;
   const isIdea = !!(ideaPerf && idea);
-  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isRug && rugPerf ? rugPerf : isHive && hivePerf ? hivePerf : isCopy && copyPerf ? copyPerf : isLot && lotPerf ? lotPerf : isMoon && moonPerf ? moonPerf : isDesk && deskPerf ? deskPerf : isTrench && trenchPerf ? trenchPerf : isOne && onePerf ? onePerf : isMeta && metaPerf ? metaPerf
+  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isRug && rugPerf ? rugPerf : isHive && hivePerf ? hivePerf : isCopy && copyPerf ? copyPerf : isLot && lotPerf ? lotPerf : isMoon && moonPerf ? moonPerf : isDesk && deskPerf ? deskPerf : isTrench && trenchPerf ? trenchPerf : isOne && onePerf ? onePerf : isTheta && thetaPerf ? thetaPerf : isMeta && metaPerf ? metaPerf
     : isIdea ? (ideaPerf as Performance) : data.perf;
   const meta = isMeta && p.sniper ? (p.sniper as unknown as MetaInfo) : undefined;
   const kal = isKalshi ? p.kalshi : undefined;
@@ -1888,6 +1978,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             {isSniper
               ? "paper trading · Solana DEX memecoins · DexScreener radar"
               : isKalshi ? "paper trading · Kalshi prediction markets · public order books + trade tape"
+              : isTheta ? "paper trading · Deribit BTC options · a weekly iron condor, paid when Bitcoin stays in a range"
               : isOne ? "paper trading · Hyperliquid · one rising coin at a time, held until it should be dropped or it peaks"
               : isTrench ? "paper trading · Solana memecoins · the trencher's free tools as code, then a 10-minute holder-growth confirm"
               : isDesk ? "paper trading · Solana memecoins · four agents, four steps: scan, verify (code, then Grok on X), execute, exit"
@@ -1924,6 +2015,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : s.key === "grokdesk" ? (deskPerf?.equity ?? null)
           : s.key === "trenchkit" ? (trenchPerf?.equity ?? null)
           : s.key === "onecoin" ? (onePerf?.equity ?? null)
+          : s.key === "thetashop" ? (thetaPerf?.equity ?? null)
             : data.perf.strategies?.[s.key as `idea:${string}`]?.equity ?? null)} />
 
       <div key={slideKey} className={`slide slide--from-${dir}`}>
@@ -1951,7 +2043,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
                 </div>
               </>
             ) : (<>
-            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isRug ? "Strategy 23 paper equity" : isHive ? "Strategy 33 paper equity" : isDesk ? "Strategy 34 paper equity" : isTrench ? "Strategy 36 paper equity" : isOne ? `Strategy 38 · round ${oneInfo?.round ?? 1} equity` : isCopy ? "Strategy 25 paper equity" : isLot ? "Strategy 26 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
+            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isRug ? "Strategy 23 paper equity" : isHive ? "Strategy 33 paper equity" : isDesk ? "Strategy 34 paper equity" : isTrench ? "Strategy 36 paper equity" : isOne ? `Strategy 38 · round ${oneInfo?.round ?? 1} equity` : isTheta ? "Strategy 41 paper equity" : isCopy ? "Strategy 25 paper equity" : isLot ? "Strategy 26 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
             <div className="hero__equity">{usd(p.equity)}</div>
             <div className="hero__pnl">
               <Pol v={p.pnl}>{arrow(p.pnl)} {signedUsd(p.pnl)} ({pct(p.pnl_pct, 2, true)})</Pol>
@@ -1966,6 +2058,14 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               <span><i className="swatch swatch--zone" /> snipe zone</span>
               <span><i className="swatch swatch--reject" /> rejected</span>
               <span className="legend__note">x: pair age · y: 5-minute move · depth: buy pressure · size: liquidity · lines link nearest neighbours · drag to orbit, hover a token</span>
+            </div>
+          ) : isTheta ? (
+            <div className="legend" aria-label="Legend">
+              <span><i className="swatch swatch--gain" /> profit at expiry</span>
+              <span><i className="swatch swatch--loss" /> loss at expiry (capped at the wings)</span>
+              <span><i className="swatch swatch--zone" /> Bitcoin now</span>
+              <span><i className="swatch swatch--held" /> what the condor is worth right now</span>
+              <span className="legend__note">the tent is the open condor&apos;s payoff at expiry across Bitcoin&apos;s price: flat top = the credit kept if BTC ends between the sold strikes, slopes down to the capped loss · posts behind: the option chain, height = delta · drag to orbit</span>
             </div>
           ) : isOne ? (
             <div className="legend" aria-label="Legend">
@@ -2085,6 +2185,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
       <section className={`scene ${isSniper ? "scene--sniper" : isIdea || isKalshi || isMeta ? "scene--idea" : ""}`}
         aria-label={isSniper ? "3D cluster map of Solana pairs the sniper is tracking"
           : isKalshi ? "3D order-book towers for the Kalshi markets the scalper works"
+          : isTheta ? "3D payoff tent of the open Bitcoin iron condor, with Bitcoin's price now"
           : isOne ? "3D field of rising Hyperliquid coins around the one coin held, with its stop, peak and give-back levels"
           : isTrench ? "3D rail: every recent lead riding from GeckoTerminal through the free tools to the confirm"
           : isDesk ? "3D trading desk rail: every recent lead riding from its scanner to the step where it ended"
@@ -2127,6 +2228,11 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         {visited.lotladder && lotInfo && (
           <div className={`scene__layer ${isLot ? "scene__layer--on" : ""}`} aria-hidden={!isLot}>
             <LotScene info={lotInfo} active={isLot} />
+          </div>
+        )}
+        {visited.thetashop && thetaInfo && (
+          <div className={`scene__layer ${isTheta ? "scene__layer--on" : ""}`} aria-hidden={!isTheta}>
+            <ThetaScene info={thetaInfo} active={isTheta} />
           </div>
         )}
         {visited.onecoin && oneInfo && (
@@ -2197,6 +2303,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : isDesk && deskInfo ? <DeskPanels p={p} D={deskInfo} now={now} />
           : isTrench && trenchInfo ? <DeskPanels p={p} D={trenchInfo} now={now} />
           : isOne && oneInfo ? <OnePanels p={p} O={oneInfo} now={now} />
+          : isTheta && thetaInfo ? <ThetaPanels p={p} T={thetaInfo} now={now} />
           : isIdea && idea ? <IdeaPanels p={p} idea={idea} /> : <TrendPanels p={p} />}
 
         </>)}
@@ -2344,7 +2451,9 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         </>)}
 
         <footer className="foot">
-          {isOne
+          {isTheta
+            ? "Paper trading only — no order reaches Deribit. Every leg is priced at Deribit's live bid (selling) or ask (buying) with Deribit's option fee, and an unclosed condor settles at Deribit's 08:00 UTC delivery price. The most a condor can lose is fixed when it opens. Not investment advice."
+            : isOne
             ? "Paper trading only — no order reaches Hyperliquid. Buys and sells walk Hyperliquid's live order book and pay the 4.5 bp taker fee; funding is paid or received every hour at the exchange's rate. 1x long, no leverage. The total counts every $10k round put in. Not investment advice."
             : isTrench
             ? "Paper trading only — no key, no wallet, no real order. Fills are simulated against the real DexScreener pool: AMM price impact, 0.25% DEX fee, $0.10 priority fee and 2% latency slippage. The tools are fact filters, not guarantees: a coin that passes all 13 can still go to zero. Not investment advice."
