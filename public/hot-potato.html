@@ -178,8 +178,8 @@ th { color: var(--muted); font-weight: 700; font-size: 11px; letter-spacing: .08
     G.tape = G.tape.slice(0, 80);
   }
 
-  async function quote(id) {
-    const r = await fetch(`/api/coin?id=${encodeURIComponent(id)}`);
+  async function quote(c) {
+    const r = await fetch(`/api/coin?sym=${encodeURIComponent(c.sym || "")}&id=${encodeURIComponent(c.topic || "")}`);
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !Array.isArray(d.closes) || !d.closes.length) throw { code: r.status === 503 ? "busy" : "no_price", message: d.error };
     return d.closes;
@@ -189,7 +189,7 @@ th { color: var(--muted); font-weight: 700; font-size: 11px; letter-spacing: .08
     const r = await fetch("/api/hot");
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !Array.isArray(d.coins)) throw { code: "busy", message: d.error };
-    hotList = d.coins.map((c) => ({ ...c, topic: c.id })); hotAt = Date.now();
+    hotList = d.coins.map((c) => ({ ...c, sym: c.symbol, topic: c.id })); hotAt = Date.now();
     return hotList;
   }
 
@@ -205,7 +205,7 @@ th { color: var(--muted); font-weight: 700; font-size: 11px; letter-spacing: .08
       let pick = null, px = null;
       for (let tries = 0; tries < 3 && !px; tries++) {
         pick = pool[Math.floor(Math.random() * pool.length)];
-        try { px = await quote(pick.topic); } catch { px = null; }
+        try { px = await quote(pick); } catch { px = null; }
       }
       if (!px) { say("Couldn't get a clean price on the wheel's picks. Toss again."); return; }
       const entry = px[px.length - 1];
@@ -248,7 +248,7 @@ th { color: var(--muted); font-weight: 700; font-size: 11px; letter-spacing: .08
   async function refreshHeld() {
     for (const h of G.hold.slice()) {
       try {
-        const px = await quote(h.topic);
+        const px = await quote(h);
         const cur = G.hold.find((x) => x.id === h.id); if (!cur) continue;
         cur.px = px; cur.last = px[px.length - 1]; cur.err = "";
       } catch (e) { const cur = G.hold.find((x) => x.id === h.id); if (cur) cur.err = errText(e); }
