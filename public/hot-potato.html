@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="icon" href="/icon.svg">
+<title>Hot Potato</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Nunito:wght@400;700;900&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: a game-show stage. Scoreboard across the top (cash / bankroll / round), one giant "toss" button,
+   then a row of potato cards you rule HOT (hold) or NOT (sell and toss again). One deliberate dark world. */
+:root {
+  color-scheme: dark;
+  --bg: #15123d;          /* stage indigo */
+  --panel: #211d58;
+  --panel-2: #2c2670;
+  --line: #3d3790;
+  --fg: #fbf7ff;
+  --muted: #b3acdf;
+  --potato: #ff7b29;      /* the accent */
+  --gold: #ffd23f;
+  --hot: #ff5a36;
+  --cold: #5fd4ff;
+  --win: #4be3a0;
+  --lose: #ff4f79;
+  --display: "Luckiest Guy", "Impact", system-ui, sans-serif;
+  --body: "Nunito", "Avenir Next", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body { background: radial-gradient(900px 420px at 50% -8%, #3a2a8f 0%, transparent 70%), var(--bg); color: var(--fg);
+  font-family: var(--body); font-size: 15px; line-height: 1.5; padding-block: 18px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 18px; }
+h1 { font-family: var(--display); font-weight: 400; font-size: clamp(40px, 9vw, 72px); line-height: .9; margin: 0; color: var(--gold);
+  text-shadow: 0 4px 0 #b4561b, 0 8px 18px rgba(0,0,0,.35); letter-spacing: .02em; }
+.sub { color: var(--muted); margin: 6px 0 0; max-width: 60ch; }
+header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 14px; }
+.score { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.cell { background: var(--panel); border: 2px solid var(--line); border-radius: 14px; padding: 10px 12px; min-width: 0; }
+.cell span { font: 700 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.cell b { display: block; font: 700 22px var(--mono); font-variant-numeric: tabular-nums; }
+.up { color: var(--win); } .down { color: var(--lose); }
+.stage { display: grid; justify-items: center; gap: 10px; padding: 18px; background: var(--panel); border: 2px solid var(--line); border-radius: 22px; }
+button { font-family: var(--body); cursor: pointer; }
+button:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+.toss { font: 400 clamp(22px, 5vw, 32px) var(--display); letter-spacing: .03em; color: #2a1200; background: linear-gradient(180deg, #ffb35c, var(--potato));
+  border: 0; border-radius: 999px; padding: 16px 34px; box-shadow: 0 6px 0 #a3420c, 0 14px 30px rgba(255,123,41,.35); transition: transform .08s; }
+.toss:active { transform: translateY(4px); box-shadow: 0 2px 0 #a3420c; }
+.toss:disabled { filter: grayscale(.7); opacity: .6; cursor: not-allowed; }
+.say { min-height: 1.5em; text-align: center; color: var(--gold); font-weight: 700; }
+.potatoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 2px solid var(--line); border-radius: 18px; padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.card.new { border-color: var(--gold); }
+@media (prefers-reduced-motion: no-preference) { .card.new { animation: land .5s cubic-bezier(.2,1.6,.4,1); } @keyframes land { from { transform: translateY(-18px) rotate(-3deg); opacity: 0; } } }
+.ctop { display: flex; justify-content: space-between; gap: 8px; align-items: start; }
+.sym { font: 400 26px var(--display); letter-spacing: .03em; line-height: 1; }
+.name { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.pl { text-align: right; font: 700 18px var(--mono); font-variant-numeric: tabular-nums; }
+.pl small { display: block; font: 500 12px var(--mono); color: var(--muted); }
+canvas { width: 100%; height: 64px; display: block; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 700 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: var(--panel-2); color: var(--muted); }
+.chip.warn { background: rgba(255,79,121,.18); color: var(--lose); }
+.chip.ok { background: rgba(75,227,160,.15); color: var(--win); }
+.choose { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hot, .not { font: 900 15px var(--body); border-radius: 12px; padding: 10px; border: 2px solid transparent; }
+.hot { background: rgba(255,90,54,.15); color: var(--hot); border-color: rgba(255,90,54,.5); }
+.hot.on { background: var(--hot); color: #2a0a00; }
+.not { background: rgba(95,212,255,.12); color: var(--cold); border-color: rgba(95,212,255,.45); }
+.empty { text-align: center; color: var(--muted); padding: 22px; border: 2px dashed var(--line); border-radius: 18px; }
+.log { background: var(--panel); border: 2px solid var(--line); border-radius: 18px; padding: 14px; }
+.log h2 { font: 400 20px var(--display); letter-spacing: .03em; margin: 0 0 8px; color: var(--gold); }
+.tbl { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font: 500 13px var(--mono); font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 700; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.r { text-align: right; }
+.fine { color: var(--muted); font-size: 12px; max-width: 80ch; }
+.reset { background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-weight: 700; }
+.banner { background: linear-gradient(90deg, rgba(255,79,121,.25), rgba(255,123,41,.2)); border: 2px solid var(--lose); border-radius: 14px; padding: 12px 14px; font-weight: 700; }
+@media (max-width: 640px) { .score { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Hot Potato</h1>
+      <p class="sub">Press the button and a random hot crypto lands in your hands for $500. Is it hot or not? Hold it, or sell it and catch the next one. Start with $2,000; go broke and the game resets.</p>
+    </div>
+    <button class="reset" id="resetBtn" type="button">Start over</button>
+  </header>
+
+  <section class="score" aria-label="Scoreboard">
+    <div class="cell"><span>Cash</span><b id="cash">$2,000</b></div>
+    <div class="cell"><span>Bankroll</span><b id="bank">$2,000</b></div>
+    <div class="cell"><span>This round</span><b id="roundPl">$0</b></div>
+    <div class="cell"><span>Round · best</span><b id="round">1 · —</b></div>
+  </section>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <section class="stage">
+    <button class="toss" id="tossBtn" type="button">Toss me a hot one</button>
+    <div class="say" id="say" aria-live="polite">Each toss costs $500. You can juggle four at once.</div>
+  </section>
+
+  <section class="potatoes" id="potatoes" aria-label="Coins you're holding"></section>
+
+  <section class="log">
+    <h2>The tape</h2>
+    <div class="tbl"><table><thead><tr><th>When</th><th>Round</th><th>Coin</th><th>What</th><th class="r">Price</th><th class="r">P&amp;L</th></tr></thead><tbody id="tape"></tbody></table></div>
+  </section>
+
+  <p class="fine">Paper game, no real money. "Hot" means trending on CoinGecko or one of the day's biggest gainers among the most traded coins (at least $1M a day). Prices come from CoinGecko, refreshed every two minutes while the page is open; each buy and sell pays 0.5% to mimic swap costs. Your game is saved in this browser. The hints on each card use the same rules as Heat Check. Not advice.</p>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const START = 2000, TICKET = 500, MAX_HOLD = 4, COST = 0.005, BUST_BELOW = 250;
+  const KEY = "hotpotato.v1";
+  const $ = (id) => document.getElementById(id);
+  let mcp = true, unsubs = {}, hotList = [], hotAt = 0, busy = false;   // mcp kept as "data source ready" flag
+
+  let G = loadGame();
+  function loadGame() { try { const g = JSON.parse(localStorage.getItem(KEY) || "null"); if (g && typeof g.cash === "number") return g; } catch {} return { round: 1, best: null, cash: START, hold: [], tape: [], rounds: [], started: Date.now() }; }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(G)); } catch {} }
+
+  // ---------- table helpers (unused by the live data path) ----------
+  function table(text) {
+    const lines = String(text || "").split("\n").filter((l) => l.trim().startsWith("|"));
+    if (lines.length < 3) return [];
+    const head = lines[0].split("|").map((s) => s.trim().toLowerCase());
+    return lines.slice(2).map((l) => { const c = l.split("|").map((s) => s.trim()); const o = {}; head.forEach((h, i) => { if (h) o[h] = c[i]; }); return o; });
+  }
+  const num = (s) => { if (s == null) return NaN; const v = parseFloat(String(s).replace(/[$,%\s]/g, "")); return v; };
+  const textOf = (r) => typeof r.payload === "string" ? r.payload : (r.content || []).map((b) => b.text || "").join("\n");
+  function parseHot(text) {
+    return table(text).map((o) => {
+      const m = /\[(.+?) \((.+?)\)\]\(\/topic\/(.+?)\)/.exec(o.coin || "");
+      if (!m) return null;
+      return { name: m[1], sym: m[2], topic: decodeURIComponent(m[3]), price: num(o.price), ch1: num(o["price change 1h"]),
+        ch24: num(o["price change 24h"]), galaxy: num(o["galaxy score"]), vol: num(o["trading volume"]), rank: num(o.altrank) };
+    }).filter((c) => c && c.ch24 > 0 && c.vol >= 1e6 && isFinite(c.price) && c.price > 0);
+  }
+  function parseSeries(text) {
+    return table(text).map((o) => ({ close: num(o.close), sent: num(o.sentiment) })).filter((r) => isFinite(r.close) && r.close > 0);
+  }
+
+  // ---------- Heat Check's rules, for the hint on each card ----------
+  function ema(xs, n) { const k = 2 / (n + 1); let e = xs[0]; for (const x of xs.slice(1)) e += k * (x - e); return e; }
+  function hint(px, entry) {
+    if (px.length < 6) return null;
+    const n = px.length, now = px[n - 1], ago = (h) => px[Math.max(0, n - 1 - h)];
+    const ch1 = now / ago(1) - 1, ch4 = now / ago(4) - 1, ch24 = now / px[0] - 1;
+    const hi = Math.max(...px), lo = Math.min(...px), give = (hi - now) / hi, avg = ema(px, 6), pnl = now / entry - 1;
+    if (pnl <= -0.08) return ["warn", "Drop it: 8% under your buy"];
+    if (ch4 <= -0.04 && now < avg) return ["warn", "Drop it: sliding"];
+    if ((hi / lo - 1 >= 0.08 || hi / entry - 1 >= 0.08) && give >= 0.04) return ["warn", "Sell: peaking"];
+    if (ch24 >= 0.15 && ch1 <= -0.015) return ["warn", "Sell: stalling"];
+    if (now < avg || ch4 < 0) return ["", "Cooling"];
+    return ["ok", "Still hot"];
+  }
+
+  // ---------- money ----------
+  const usd = (x, d = 0) => `${x < 0 ? "-" : ""}$${Math.abs(x).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d })}`;
+  const sgn = (x, d = 0) => `${x >= 0 ? "+" : "-"}$${Math.abs(x).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d })}`;
+  const fmtPx = (x) => !isFinite(x) ? "—" : x >= 1000 ? x.toLocaleString(undefined, { maximumFractionDigits: 0 }) : x >= 1 ? x.toFixed(3) : x.toPrecision(4);
+  const value = (h) => h.qty * (h.last || h.entry) * (1 - COST);
+  const bankroll = () => G.cash + G.hold.reduce((a, h) => a + value(h), 0);
+
+  function log(action, h, px, pnl) {
+    G.tape.unshift({ t: Date.now(), round: G.round, sym: h.sym, action, px, pnl });
+    G.tape = G.tape.slice(0, 80);
+  }
+
+  async function quote(id) {
+    const r = await fetch(`/api/coin?id=${encodeURIComponent(id)}`);
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !Array.isArray(d.closes) || !d.closes.length) throw { code: r.status === 503 ? "busy" : "no_price", message: d.error };
+    return d.closes;
+  }
+  async function hotCoins() {
+    if (hotList.length && Date.now() - hotAt < 5 * 60_000) return hotList;
+    const r = await fetch("/api/hot");
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !Array.isArray(d.coins)) throw { code: "busy", message: d.error };
+    hotList = d.coins.map((c) => ({ ...c, topic: c.id })); hotAt = Date.now();
+    return hotList;
+  }
+
+  async function toss() {
+    if (busy || !mcp) return;
+    if (G.hold.length >= MAX_HOLD) { say("Hands full! Rule one of them NOT to make room."); return; }
+    if (G.cash < TICKET) { say("Not enough cash for another $500 toss. Sell something first."); return; }
+    busy = true; render(); say("Spinning the wheel…");
+    try {
+      const held = new Set(G.hold.map((h) => h.sym));
+      const pool = (await hotCoins()).filter((c) => !held.has(c.sym));
+      if (!pool.length) { say("Nothing hot enough right now. Try again in a few minutes."); return; }
+      let pick = null, px = null;
+      for (let tries = 0; tries < 3 && !px; tries++) {
+        pick = pool[Math.floor(Math.random() * pool.length)];
+        try { px = await quote(pick.topic); } catch { px = null; }
+      }
+      if (!px) { say("Couldn't get a clean price on the wheel's picks. Toss again."); return; }
+      const entry = px[px.length - 1];
+      const qty = TICKET * (1 - COST) / entry;
+      const h = { id: `${pick.sym}-${Date.now()}`, sym: pick.sym, name: pick.name, topic: pick.topic, qty, entry, last: entry, px,
+        at: Date.now(), ch24: pick.ch24, galaxy: pick.galaxy, rank: pick.rank, verdict: null, fresh: true };
+      G.cash -= TICKET; G.hold.push(h); log("buy", h, entry, null); save();
+      say(`${pick.sym} lands in your hands: up ${pick.ch24.toFixed(0)}% today (${pick.why}). Hot or not?`);
+      watch(h);
+    } catch (e) { handleErr(e); }
+    finally { busy = false; render(); }
+  }
+
+  function sell(id, andNext) {
+    const i = G.hold.findIndex((h) => h.id === id); if (i < 0) return;
+    const h = G.hold[i], proceeds = value(h), pnl = proceeds - TICKET;
+    G.cash += proceeds; G.hold.splice(i, 1);
+    if (unsubs[id]) { try { unsubs[id](); } catch {} delete unsubs[id]; }
+    log("sell", h, h.last, pnl); save();
+    say(`${h.sym} is NOT: sold for ${usd(proceeds)} (${sgn(pnl)}).`);
+    if (!checkBust() && andNext) toss(); else render();
+  }
+
+  function checkBust() {
+    const b = bankroll();
+    if ((G.cash < TICKET && !G.hold.length) || b < BUST_BELOW) {
+      const ended = { round: G.round, end: b, at: Date.now() };
+      G.rounds = (G.rounds || []).concat([ended]).slice(-30);
+      Object.values(unsubs).forEach((u) => { try { u(); } catch {} }); unsubs = {};
+      const best = G.best == null ? b : Math.max(G.best, b);
+      G = { round: G.round + 1, best, cash: START, hold: [], tape: G.tape, rounds: G.rounds, started: Date.now() };
+      save();
+      const ban = $("banner"); ban.hidden = false;
+      ban.textContent = `Burned! Round ${ended.round} ended at ${usd(ended.end)}. Fresh $2,000 for round ${G.round}.`;
+      render(); return true;
+    }
+    return false;
+  }
+
+  async function refreshHeld() {
+    for (const h of G.hold.slice()) {
+      try {
+        const px = await quote(h.topic);
+        const cur = G.hold.find((x) => x.id === h.id); if (!cur) continue;
+        cur.px = px; cur.last = px[px.length - 1]; cur.err = "";
+      } catch (e) { const cur = G.hold.find((x) => x.id === h.id); if (cur) cur.err = errText(e); }
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    save(); if (!checkBust()) render();
+  }
+  function watch() {}
+
+  function errText(e) {
+    const c = e && e.code;
+    return ({ busy: "The price source is busy. Give it a minute.",
+      no_price: "No price for that coin right now." })[c] || "Couldn't reach the price source. Check your connection.";
+  }
+  function handleErr(e) { say(errText(e)); }
+  function say(t) { $("say").textContent = t; }
+
+  // ---------- render ----------
+  function render() {
+    const b = bankroll(), rpl = b - START;
+    $("cash").textContent = usd(G.cash);
+    $("bank").textContent = usd(b);
+    const rp = $("roundPl"); rp.textContent = sgn(rpl); rp.className = rpl >= 0 ? "up" : "down";
+    $("round").textContent = `${G.round} · ${G.best == null ? "—" : usd(G.best)}`;
+    $("tossBtn").disabled = busy || !mcp || G.hold.length >= MAX_HOLD || G.cash < TICKET;
+    const box = $("potatoes"); box.textContent = "";
+    if (!G.hold.length) {
+      const e = document.createElement("div"); e.className = "empty";
+      e.textContent = "No potatoes yet. Hit the button and catch one.";
+      box.appendChild(e);
+    }
+    for (const h of G.hold) {
+      const v = value(h), pnl = v - TICKET, pct = h.last / h.entry - 1;
+      const hn = hint(h.px || [], h.entry);
+      const c = document.createElement("article"); c.className = "card" + (h.fresh ? " new" : "");
+      c.innerHTML = `<div class="ctop"><div><div class="sym"></div><div class="name"></div></div>
+          <div class="pl ${pnl >= 0 ? "up" : "down"}">${sgn(pnl, 2)}<small>${(pct * 100).toFixed(1)}% · ${usd(v, 2)}</small></div></div>
+        <canvas width="500" height="128" aria-label="24-hour price"></canvas>
+        <div class="facts"><span class="chip">in at $${fmtPx(h.entry)}</span><span class="chip">now $${fmtPx(h.last)}</span>
+          ${hn ? `<span class="chip ${hn[0]}">${hn[1]}</span>` : ""}${h.verdict === "hot" ? '<span class="chip ok">you said HOT</span>' : ""}</div>
+        <div class="name err"></div>
+        <div class="choose"><button type="button" class="hot ${h.verdict === "hot" ? "on" : ""}">HOT · hold</button><button type="button" class="not">NOT · sell + next</button></div>`;
+      c.querySelector(".sym").textContent = h.sym;
+      c.querySelector(".name").textContent = `${h.name} · was +${(h.ch24 || 0).toFixed(0)}% on the day · held ${ago(h.at)}`;
+      c.querySelector(".err").textContent = h.err || "";
+      c.querySelector(".hot").addEventListener("click", () => { h.verdict = "hot"; h.fresh = false; save(); say(`${h.sym} is HOT. Holding.`); render(); });
+      c.querySelector(".not").addEventListener("click", () => sell(h.id, true));
+      box.appendChild(c);
+      draw(c.querySelector("canvas"), h, pnl >= 0);
+    }
+    const tb = $("tape"); tb.textContent = "";
+    for (const t of G.tape.slice(0, 40)) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${new Date(t.t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</td><td>${t.round}</td><td></td><td>${t.action}</td><td class="r">$${fmtPx(t.px)}</td><td class="r ${t.pnl == null ? "" : t.pnl >= 0 ? "up" : "down"}">${t.pnl == null ? "—" : sgn(t.pnl, 2)}</td>`;
+      tr.children[2].textContent = t.sym;
+      tb.appendChild(tr);
+    }
+  }
+  function ago(t) { const m = Math.round((Date.now() - t) / 60000); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`; }
+  function draw(cv, h, up) {
+    const px = h.px || [], ctx = cv.getContext("2d"), W = cv.width, H = cv.height, p = 8;
+    ctx.clearRect(0, 0, W, H); if (px.length < 2) return;
+    const vals = px.concat([h.entry]), mn = Math.min(...vals), mx = Math.max(...vals), sp = mx - mn || mx * 0.01;
+    const x = (i) => p + i / (px.length - 1) * (W - 2 * p), y = (v) => H - p - (v - mn) / sp * (H - 2 * p);
+    const css = getComputedStyle(document.documentElement), col = css.getPropertyValue(up ? "--win" : "--lose").trim();
+    ctx.setLineDash([5, 5]); ctx.strokeStyle = css.getPropertyValue("--muted").trim(); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(p, y(h.entry)); ctx.lineTo(W - p, y(h.entry)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); px.forEach((v, i) => i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v))); ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x(px.length - 1), y(px[px.length - 1]), 5, 0, 7); ctx.fill();
+  }
+
+  $("tossBtn").addEventListener("click", toss);
+  $("resetBtn").addEventListener("click", () => {
+    const btn = $("resetBtn");
+    if (btn.dataset.armed !== "1") { btn.dataset.armed = "1"; btn.textContent = "Tap again to reset"; setTimeout(() => { btn.dataset.armed = ""; btn.textContent = "Start over"; }, 3000); return; }
+    Object.values(unsubs).forEach((u) => { try { u(); } catch {} }); unsubs = {};
+    G = { round: 1, best: null, cash: START, hold: [], tape: [], rounds: [], started: Date.now() };
+    save(); $("banner").hidden = true; btn.dataset.armed = ""; btn.textContent = "Start over"; say("Fresh $2,000. Toss away."); render();
+  });
+
+  render();
+  refreshHeld();
+  setInterval(refreshHeld, 120_000);
+})();
+</script>
+
+</body>
+</html>

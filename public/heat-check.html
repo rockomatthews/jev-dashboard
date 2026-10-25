@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="icon" href="/icon.svg">
+<title>Heat Check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a "heat board" — one alarm strip on top, five coin tiles below, each a little thermometer + 24 h trace.
+   Deliberately one dark world (a trading-floor heat board), so no light variant. */
+:root {
+  color-scheme: dark;
+  --bg: #120d1c;          /* plum-black board */
+  --panel: #1d1530;
+  --panel-2: #271c40;
+  --line: #3a2d58;
+  --fg: #f4eefc;
+  --muted: #a99bc4;
+  --flame: #ff8a3d;       /* the accent: heat */
+  --flame-2: #ffd166;
+  --ride: #46e0a5;        /* semantic: rising */
+  --cool: #ffcf5a;        /* semantic: cooling */
+  --sell: #ff8a3d;        /* semantic: peaking */
+  --drop: #ff4d6d;        /* semantic: drop it */
+  --display: "Bungee", "Impact", system-ui, sans-serif;
+  --body: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  background: radial-gradient(1200px 500px at 15% -10%, #3b1c3f 0%, transparent 60%), var(--bg);
+  color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px; min-height: 100%;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 18px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+h1 { font-family: var(--display); font-weight: 400; font-size: clamp(34px, 7vw, 58px); line-height: .95; margin: 0;
+  background: linear-gradient(90deg, var(--flame-2), var(--flame) 55%, var(--drop)); -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-wrap: balance; }
+.tag { color: var(--muted); max-width: 52ch; margin: 6px 0 0; }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; }
+button { font: 600 14px var(--body); color: var(--fg); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 9px 14px; cursor: pointer; }
+button:hover { border-color: var(--flame); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--flame-2); outline-offset: 2px; }
+button.primary { background: linear-gradient(180deg, #ff9d55, #f2701f); color: #1b0e05; border-color: transparent; }
+button.armed { border-color: var(--ride); color: var(--ride); }
+
+/* alarm strip */
+.alarm { border-radius: 14px; padding: 14px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  background: var(--panel); border: 1px solid var(--line); }
+.alarm.hot { background: linear-gradient(90deg, rgba(255,77,109,.22), rgba(255,138,61,.14)); border-color: var(--drop); }
+.alarm .big { font-family: var(--display); font-size: 20px; letter-spacing: .02em; }
+.alarm .msgs { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.pill { font: 600 12px var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 4px 9px; border-radius: 999px; white-space: nowrap; }
+.p-ride { background: rgba(70,224,165,.14); color: var(--ride); }
+.p-cool { background: rgba(255,207,90,.14); color: var(--cool); }
+.p-sell { background: rgba(255,138,61,.18); color: var(--sell); }
+.p-drop { background: rgba(255,77,109,.2); color: var(--drop); }
+.p-wait { background: rgba(169,155,196,.14); color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) { .alarm.hot .big { animation: pulse 1.2s ease-in-out infinite; } }
+@keyframes pulse { 50% { opacity: .55; } }
+
+/* the editor */
+form.edit { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 10px; }
+form.edit[hidden] { display: none !important; }
+.slots { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.slot { display: grid; gap: 6px; }
+.slot label { font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+input { width: 100%; font: 600 15px var(--mono); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+input::placeholder { color: #6f6290; font-weight: 400; }
+.hint { color: var(--muted); font-size: 13px; margin: 0; }
+
+/* tiles */
+.board { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: 14px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: grid; gap: 10px; min-width: 0;
+  position: relative; overflow: hidden; }
+.tile.s-drop { border-color: var(--drop); box-shadow: 0 0 0 1px rgba(255,77,109,.35), 0 10px 30px rgba(255,77,109,.12); }
+.tile.s-sell { border-color: var(--sell); box-shadow: 0 10px 30px rgba(255,138,61,.12); }
+.top { display: flex; justify-content: space-between; align-items: start; gap: 10px; }
+.sym { font-family: var(--display); font-size: 26px; line-height: 1; }
+.px { font: 600 15px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 4px; }
+.verdict { display: grid; justify-items: end; gap: 6px; text-align: right; }
+.why { font-size: 14px; min-height: 2.6em; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.stat { background: var(--panel-2); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+.stat b { display: block; font: 600 14px var(--mono); font-variant-numeric: tabular-nums; }
+.stat span { font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.up { color: var(--ride); } .down { color: var(--drop); }
+.heat { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; }
+.heat span { font: 600 11px var(--mono); letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+.bar { height: 10px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #5b7cff, var(--flame-2), var(--flame), var(--drop)); }
+canvas { width: 100%; height: 86px; display: block; }
+.foot { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font: 400 12px var(--mono); flex-wrap: wrap; }
+.err { color: var(--cool); font-size: 14px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--muted); font-size: 13px; }
+.legend div { display: flex; gap: 8px; align-items: center; max-width: 34ch; }
+.fine { color: var(--muted); font-size: 12px; max-width: 80ch; }
+@media (max-width: 760px) { .slots { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Heat Check</h1>
+      <p class="tag">Five coins you think are running hot. The board watches them every five minutes and yells when it's time to sell into the peak or drop the coin.</p>
+    </div>
+    <div class="controls">
+      <button id="editBtn" type="button">Change coins</button>
+      <button id="alarmBtn" type="button">Arm sound alarm</button>
+      <button id="refreshBtn" type="button" class="primary">Check now</button>
+    </div>
+  </header>
+
+  <section class="alarm" id="alarm" aria-live="polite">
+    <span class="big" id="alarmBig">Warming up…</span>
+    <div class="msgs" id="alarmMsgs"></div>
+  </section>
+
+  <form class="edit" id="editForm" hidden>
+    <div class="slots" id="slots"></div>
+    <p class="hint">Type a ticker (SOL, HYPE, PEPE). Add the price you got in at if you want the board to also guard your entry: it says drop it at 8% under that price.</p>
+    <div class="controls"><button type="submit" class="primary">Save and check</button><button type="button" id="cancelEdit">Cancel</button></div>
+  </form>
+
+  <section class="board" id="board" aria-label="Your five coins"></section>
+
+  <section class="legend" aria-label="What the calls mean">
+    <div><span class="pill p-ride">Riding</span> Rising: up over the last 4 hours and above its 6-hour average.</div>
+    <div><span class="pill p-cool">Cooling</span> Lost a step: slipped under its average or off today's high. Watch it.</div>
+    <div><span class="pill p-sell">Sell · peaking</span> It ran up and is giving it back from the top. Take the win.</div>
+    <div><span class="pill p-drop">Drop it</span> It's falling: a hard 4-hour slide, a bad day, or 8% under your entry.</div>
+  </section>
+  <p class="fine" id="fine">Prices and hourly history come from CoinGecko, refreshed every five minutes while this page is open. These calls are simple rules on the last 24 hours of hourly prices, not advice. Your coins are saved in this browser. Memecoins can drop faster than any five-minute check.</p>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const REFRESH_MS = 5 * 60 * 1000;
+  const EXAMPLE = [{ sym: "SOL", entry: "" }, { sym: "HYPE", entry: "" }, { sym: "DOGE", entry: "" }, { sym: "PEPE", entry: "" }, { sym: "SUI", entry: "" }];
+  const KEY = "heatcheck.coins.v1";
+
+  const $ = (id) => document.getElementById(id);
+  let coins = load();
+  let usingExample = !savedExists();
+  const state = {};          // sym -> {status, reasons, data, error, at}
+  let alarmOn = false;
+  let audio = null;
+
+  function savedExists() { try { return !!localStorage.getItem(KEY); } catch { return false; } }
+  function load() {
+    try { const v = JSON.parse(localStorage.getItem(KEY) || "null"); if (Array.isArray(v) && v.length) return v.slice(0, 5); } catch {}
+    return EXAMPLE.map((c) => ({ ...c }));
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(coins)); } catch {} }
+
+  // ---------- the rules (pure) ----------
+  function parseSeries(payload) {
+    const text = typeof payload === "string" ? payload : (payload && typeof payload === "object" ? JSON.stringify(payload) : "");
+    const lines = text.split("\n").filter((l) => l.trim().startsWith("|"));
+    if (lines.length < 3) return null;
+    const head = lines[0].split("|").map((s) => s.trim().toLowerCase());
+    const iClose = head.indexOf("close"), iSent = head.indexOf("sentiment"), iTime = head.indexOf("time");
+    if (iClose < 0) return null;
+    const rows = [];
+    for (const l of lines.slice(2)) {
+      const c = l.split("|").map((s) => s.trim());
+      const close = parseFloat(c[iClose]);
+      if (!isFinite(close) || close <= 0) continue;
+      rows.push({ t: iTime >= 0 ? c[iTime] : "", close, sent: iSent >= 0 ? parseFloat(c[iSent]) : NaN });
+    }
+    return rows.length >= 6 ? rows : null;
+  }
+  function ema(xs, n) { const k = 2 / (n + 1); let e = xs[0]; for (const x of xs.slice(1)) e += k * (x - e); return e; }
+  function judge(rows, entry) {
+    const px = rows.map((r) => r.close), n = px.length, now = px[n - 1];
+    const ago = (h) => px[Math.max(0, n - 1 - h)];
+    const ch1 = now / ago(1) - 1, ch4 = now / ago(4) - 1, ch24 = now / px[0] - 1;
+    const hi = Math.max(...px), lo = Math.min(...px);
+    const giveback = (hi - now) / hi, ran = hi / lo - 1;
+    const avg = ema(px, 6);
+    const sents = rows.map((r) => r.sent).filter((x) => isFinite(x));
+    const sentDrop = sents.length > 4 ? sents[0] - sents[sents.length - 1] : 0;
+    const e = parseFloat(entry);
+    const pnl = isFinite(e) && e > 0 ? now / e - 1 : null;
+    const pct = (x) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`;
+    let status = "ride", reasons = [];
+    if (pnl !== null && pnl <= -0.08) { status = "drop"; reasons.push(`${pct(pnl)} from your entry`); }
+    else if (ch4 <= -0.04 && now < avg) { status = "drop"; reasons.push(`sliding: ${pct(ch4)} in 4 h and under its average`); }
+    else if (ch24 <= -0.10) { status = "drop"; reasons.push(`bad day: ${pct(ch24)} in 24 h`); }
+    else if ((ran >= 0.08 || (pnl !== null && hi / e - 1 >= 0.08)) && giveback >= 0.04) {
+      status = "sell"; reasons.push(`gave back ${(giveback * 100).toFixed(1)}% from today's high after a ${pct(ran)} run`);
+    } else if (ch24 >= 0.15 && ch1 <= -0.015) { status = "sell"; reasons.push(`stalling after a ${pct(ch24)} day (${pct(ch1)} this hour)`); }
+    else if (ch24 >= 0.05 && sentDrop >= 8) { status = "sell"; reasons.push(`price up ${pct(ch24)} but the crowd cooled ${sentDrop.toFixed(0)} pts`); }
+    else if (now < avg || ch4 < 0 || giveback >= 0.02) {
+      status = "cool";
+      reasons.push(now < avg ? "slipped under its 6-hour average" : ch4 < 0 ? `${pct(ch4)} over 4 h` : `${(giveback * 100).toFixed(1)}% off today's high`);
+    } else { reasons.push(`rising: ${pct(ch4)} in 4 h, ${pct(ch24)} today`); }
+    const heat = Math.max(0, Math.min(100, 50 + ch4 * 500 + ch24 * 150 - giveback * 600));
+    return { status, reasons, now, ch1, ch4, ch24, hi, lo, giveback, avg, pnl, heat, px, entry: isFinite(e) && e > 0 ? e : null };
+  }
+
+  // ---------- rendering ----------
+  const LABEL = { ride: "Riding", cool: "Cooling", sell: "Sell · peaking", drop: "Drop it", wait: "Checking" };
+  const fmtPx = (x) => x >= 1000 ? x.toLocaleString(undefined, { maximumFractionDigits: 0 }) : x >= 1 ? x.toFixed(3) : x.toPrecision(4);
+  const sign = (x) => (x === null || !isFinite(x)) ? "—" : `${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`;
+  const cls = (x) => x === null ? "" : x >= 0 ? "up" : "down";
+
+  function render() {
+    const board = $("board");
+    board.textContent = "";
+    for (const c of coins) {
+      if (!c.sym) continue;
+      const s = state[c.sym] || {};
+      const j = s.judge;
+      const st = s.error ? "wait" : (j ? j.status : "wait");
+      const el = document.createElement("article");
+      el.className = `tile s-${st}`;
+      el.innerHTML = `
+        <div class="top">
+          <div><div class="sym"></div><div class="px"></div></div>
+          <div class="verdict"><span class="pill p-${st}">${LABEL[st]}</span></div>
+        </div>
+        <div class="why"></div>
+        <canvas width="640" height="172" aria-label="24-hour price trace"></canvas>
+        <div class="stats">
+          <div class="stat"><span>1 h</span><b class="${j ? cls(j.ch1) : ""}">${j ? sign(j.ch1) : "—"}</b></div>
+          <div class="stat"><span>4 h</span><b class="${j ? cls(j.ch4) : ""}">${j ? sign(j.ch4) : "—"}</b></div>
+          <div class="stat"><span>24 h</span><b class="${j ? cls(j.ch24) : ""}">${j ? sign(j.ch24) : "—"}</b></div>
+          <div class="stat"><span>${j && j.entry ? "Yours" : "Off high"}</span><b class="${j && j.entry ? cls(j.pnl) : ""}">${j ? (j.entry ? sign(j.pnl) : `-${(j.giveback * 100).toFixed(1)}%`) : "—"}</b></div>
+        </div>
+        <div class="heat"><span>Heat</span><div class="bar"><i style="width:${j ? j.heat.toFixed(0) : 0}%"></i></div><span>${j ? j.heat.toFixed(0) : "—"}</span></div>
+        <div class="foot"><span class="when"></span><span class="ent"></span></div>`;
+      el.querySelector(".sym").textContent = c.sym;
+      el.querySelector(".px").textContent = j ? `$${fmtPx(j.now)}` : "";
+      const why = el.querySelector(".why");
+      if (s.error) { why.className = "why err"; why.textContent = s.error; }
+      else why.textContent = j ? j.reasons.join(" · ") : "Reading the last 24 hours…";
+      el.querySelector(".when").textContent = s.at ? `checked ${new Date(s.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "";
+      el.querySelector(".ent").textContent = j && j.entry ? `entry $${fmtPx(j.entry)} · stop $${fmtPx(j.entry * 0.92)}` : (usingExample ? "example coin" : "");
+      board.appendChild(el);
+      if (j) drawTrace(el.querySelector("canvas"), j, st);
+    }
+    renderAlarm();
+  }
+
+  function drawTrace(cv, j, st) {
+    const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, pad = 10;
+    const vals = j.px.concat(j.entry ? [j.entry, j.entry * 0.92] : []);
+    const mn = Math.min(...vals), mx = Math.max(...vals), span = mx - mn || mx * 0.01;
+    const x = (i) => pad + (i / (j.px.length - 1)) * (W - 2 * pad);
+    const y = (v) => H - pad - ((v - mn) / span) * (H - 2 * pad);
+    ctx.clearRect(0, 0, W, H);
+    const css = getComputedStyle(document.documentElement);
+    const col = css.getPropertyValue(st === "drop" ? "--drop" : st === "sell" ? "--sell" : st === "cool" ? "--cool" : "--ride").trim();
+    ctx.strokeStyle = css.getPropertyValue("--line").trim(); ctx.lineWidth = 1;
+    for (let k = 1; k < 4; k++) { ctx.beginPath(); ctx.moveTo(pad, pad + k * (H - 2 * pad) / 4); ctx.lineTo(W - pad, pad + k * (H - 2 * pad) / 4); ctx.stroke(); }
+    if (j.entry) {
+      ctx.setLineDash([6, 6]); ctx.strokeStyle = css.getPropertyValue("--muted").trim();
+      ctx.beginPath(); ctx.moveTo(pad, y(j.entry)); ctx.lineTo(W - pad, y(j.entry)); ctx.stroke();
+      ctx.strokeStyle = css.getPropertyValue("--drop").trim();
+      ctx.beginPath(); ctx.moveTo(pad, y(j.entry * 0.92)); ctx.lineTo(W - pad, y(j.entry * 0.92)); ctx.stroke(); ctx.setLineDash([]);
+    }
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, col + "55"); g.addColorStop(1, col + "00");
+    ctx.beginPath(); j.px.forEach((v, i) => i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)));
+    ctx.lineTo(x(j.px.length - 1), H - pad); ctx.lineTo(x(0), H - pad); ctx.closePath(); ctx.fillStyle = g; ctx.fill();
+    ctx.beginPath(); j.px.forEach((v, i) => i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)));
+    ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.stroke();
+    const hiI = j.px.indexOf(j.hi);
+    ctx.fillStyle = css.getPropertyValue("--flame-2").trim(); ctx.beginPath(); ctx.arc(x(hiI), y(j.hi), 5, 0, 7); ctx.fill();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x(j.px.length - 1), y(j.now), 6, 0, 7); ctx.fill();
+  }
+
+  let lastAlarmKey = "";
+  function renderAlarm() {
+    const hot = coins.filter((c) => c.sym && state[c.sym]?.judge && ["drop", "sell"].includes(state[c.sym].judge.status));
+    const box = $("alarm"), big = $("alarmBig"), msgs = $("alarmMsgs");
+    msgs.textContent = "";
+    const allErr = coins.filter((c) => c.sym).every((c) => state[c.sym]?.error);
+    if (allErr && pageError) { box.className = "alarm"; big.textContent = pageError.title; const p = document.createElement("span"); p.className = "hint"; p.textContent = pageError.body; msgs.appendChild(p); return; }
+    if (!hot.length) {
+      box.className = "alarm";
+      const riding = coins.filter((c) => state[c.sym]?.judge?.status === "ride").length;
+      big.textContent = Object.keys(state).length ? (riding ? `${riding} riding, nothing to sell` : "No alarms") : "Warming up…";
+      return;
+    }
+    box.className = "alarm hot";
+    big.textContent = hot.length === 1 ? "1 coin needs you" : `${hot.length} coins need you`;
+    for (const c of hot) {
+      const j = state[c.sym].judge;
+      const p = document.createElement("span");
+      p.className = `pill p-${j.status}`;
+      p.textContent = `${c.sym}: ${LABEL[j.status]}`;
+      msgs.appendChild(p);
+    }
+    const key = hot.map((c) => c.sym + state[c.sym].judge.status).join(",");
+    if (key !== lastAlarmKey) { lastAlarmKey = key; if (alarmOn) beep(); }
+  }
+
+  function beep() {
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.22, 0.44].forEach((t, i) => {
+        const o = audio.createOscillator(), g = audio.createGain();
+        o.frequency.value = i === 2 ? 660 : 880; o.type = "square";
+        g.gain.setValueAtTime(0.0001, audio.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(0.15, audio.currentTime + t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + t + 0.18);
+        o.connect(g).connect(audio.destination); o.start(audio.currentTime + t); o.stop(audio.currentTime + t + 0.2);
+      });
+    } catch {}
+  }
+
+  // ---------- data: /api/coin on this site (CoinGecko, cached on the server) ----------
+  let pageError = null;
+  function onData(sym, entry, d) {
+    if (!d || !Array.isArray(d.closes) || d.closes.length < 6) { state[sym] = { error: `No hourly prices for ${sym}. Check the ticker.` }; render(); return; }
+    pageError = null;
+    state[sym] = { judge: judge(d.closes.map((close) => ({ close, sent: NaN })), entry), at: d.at || Date.now(), name: d.name };
+    render();
+  }
+  async function fetchCoin(c) {
+    try {
+      const r = await fetch(`/api/coin?sym=${encodeURIComponent(c.sym)}`);
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        if (r.status === 404) state[c.sym] = { error: d.error || `No coin with the ticker ${c.sym}.` };
+        else state[c.sym] = { ...(state[c.sym] || {}), error: state[c.sym]?.judge ? "" : (d.error || "The price source is busy. It retries on the next check.") };
+        render(); return;
+      }
+      onData(c.sym, c.entry, d);
+    } catch {
+      state[c.sym] = { ...(state[c.sym] || {}), error: state[c.sym]?.judge ? "" : "Couldn't reach the price source. Check your connection." };
+      render();
+    }
+  }
+  async function checkNow() {
+    for (const c of coins) { if (c.sym) { await fetchCoin(c); await new Promise((r) => setTimeout(r, 400)); } }
+  }
+  let timer = null;
+  function watchAll() { clearInterval(timer); checkNow(); timer = setInterval(checkNow, REFRESH_MS); }
+
+  // ---------- editor ----------
+  function openEditor() {
+    const slots = $("slots"); slots.textContent = "";
+    for (let i = 0; i < 5; i++) {
+      const c = coins[i] || { sym: "", entry: "" };
+      const d = document.createElement("div"); d.className = "slot";
+      d.innerHTML = `<label for="sym${i}">Coin ${i + 1}</label><input id="sym${i}" maxlength="12" autocomplete="off" placeholder="ticker">
+        <input id="ent${i}" inputmode="decimal" autocomplete="off" placeholder="entry $ (optional)" aria-label="Entry price for coin ${i + 1}">`;
+      d.querySelector(`#sym${i}`).value = usingExample ? "" : c.sym;
+      d.querySelector(`#ent${i}`).value = usingExample ? "" : (c.entry || "");
+      if (usingExample) d.querySelector(`#sym${i}`).placeholder = c.sym;
+      slots.appendChild(d);
+    }
+    $("editForm").hidden = false; $("sym0").focus();
+  }
+  $("editForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const next = [];
+    for (let i = 0; i < 5; i++) {
+      const sym = $(`sym${i}`).value.trim().replace(/^\$/, "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      const entry = $(`ent${i}`).value.trim().replace(/[$,]/g, "");
+      if (sym) next.push({ sym, entry: isFinite(parseFloat(entry)) ? entry : "" });
+    }
+    if (!next.length) { $("sym0").focus(); return; }
+    coins = next; usingExample = false; save();
+    for (const k of Object.keys(state)) delete state[k];
+    $("editForm").hidden = true; render(); watchAll();
+  });
+  $("cancelEdit").addEventListener("click", () => { $("editForm").hidden = true; });
+  $("editBtn").addEventListener("click", openEditor);
+  $("refreshBtn").addEventListener("click", checkNow);
+  $("alarmBtn").addEventListener("click", () => {
+    alarmOn = !alarmOn; $("alarmBtn").classList.toggle("armed", alarmOn);
+    $("alarmBtn").textContent = alarmOn ? "Alarm armed" : "Arm sound alarm";
+    if (alarmOn) beep();
+  });
+
+  render();
+  watchAll();
+})();
+</script>
+
+</body>
+</html>
