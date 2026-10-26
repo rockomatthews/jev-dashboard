@@ -1,59 +1,46 @@
 import { NextResponse } from "next/server";
 
-// "Hot" coins for Hot Potato: CoinGecko's trending list plus the day's biggest gainers among the 250 most traded
-// coins (at least $1M of volume, up on the day, stablecoins left out). Cached 5 minutes on the server.
+// "Hot" coins for Hot Potato: Hyperliquid coins that are up on the day with real volume, so every coin tossed can be
+// priced live from Hyperliquid's mid-price stream. Coins also trending on CoinGecko are tagged and go first.
+// Cached about 2 minutes on the server.
 export const runtime = "nodejs";
 
-const CG = "https://api.coingecko.com/api/v3";
-const HEADERS = { accept: "application/json", "user-agent": "jev-dashboard/1.0 (+hot-potato)" };
+const UA = { accept: "application/json", "user-agent": "jev-dashboard/1.0 (+hot-potato)" };
 
-type Hot = { id: string; symbol: string; name: string; price: number; ch24: number; volume: number; rank: number | null; why: string };
+type Hot = { hl: string; symbol: string; scale: number; price: number; ch24: number; volume: number; why: string; trending: boolean };
 
 export async function GET() {
-  const out = new Map<string, Hot>();
-  const errors: string[] = [];
   try {
-    const r = await fetch(`${CG}/search/trending`, { headers: HEADERS, next: { revalidate: 300 } });
-    if (!r.ok) throw new Error(`trending ${r.status}`);
-    const d = await r.json();
-    for (const { item } of d.coins || []) {
-      const ch = Number(item?.data?.price_change_percentage_24h?.usd);
-      const price = Number(item?.data?.price);
-      const vol = Number(String(item?.data?.total_volume || "").replace(/[$,]/g, ""));
-      if (item?.id && ch > 0 && price > 0) out.set(item.id, { id: item.id, symbol: String(item.symbol).toUpperCase(), name: item.name,
-        price, ch24: ch, volume: isFinite(vol) ? vol : 0, rank: item.market_cap_rank ?? null, why: "trending on CoinGecko" });
-    }
-  } catch (e) { errors.push((e as Error).message); }
-  try {
-    const r = await fetch(`${CG}/coins/markets?vs_currency=usd&order=volume_desc&per_page=250&page=1&price_change_percentage=24h`,
-      { headers: HEADERS, next: { revalidate: 300 } });
-    if (!r.ok) throw new Error(`markets ${r.status}`);
-    const rows = await r.json();
-    const gainers = (rows as any[])
-      .filter((c) => c.total_volume >= 1_000_000 && c.price_change_percentage_24h > 3 && !(Math.abs(c.current_price - 1) < 0.02))
-      .sort((a, b) => b.price_change_percentage_24h - a.price_change_percentage_24h).slice(0, 30);
-    for (const c of gainers) if (!out.has(c.id)) out.set(c.id, { id: c.id, symbol: String(c.symbol).toUpperCase(), name: c.name,
-      price: c.current_price, ch24: c.price_change_percentage_24h, volume: c.total_volume, rank: c.market_cap_rank ?? null,
-      why: "top 24 h gainer among the most traded coins" });
-  } catch (e) { errors.push((e as Error).message); }
-  if (out.size < 5) {
-    // CoinGecko rate-limited this server: fall back to Hyperliquid's own list (24 h gainers with real volume)
+    const r = await fetch("https://api.hyperliquid.xyz/info", {
+      method: "POST", headers: { ...UA, "content-type": "application/json" }, cache: "no-store",
+      body: JSON.stringify({ type: "metaAndAssetCtxs" }),
+    });
+    if (!r.ok) throw new Error(`Hyperliquid answered ${r.status}`);
+    const [meta, ctxs] = await r.json();
+
+    let trending = new Set<string>();
     try {
-      const r = await fetch("https://api.hyperliquid.xyz/info", { method: "POST", headers: { ...HEADERS, "content-type": "application/json" },
-        cache: "no-store", body: JSON.stringify({ type: "metaAndAssetCtxs" }) });
-      const [meta, ctxs] = await r.json();
-      (meta.universe as { name: string; isDelisted?: boolean }[]).forEach((a, i) => {
-        const c = ctxs[i] || {}, px = parseFloat(c.midPx || c.markPx), prev = parseFloat(c.prevDayPx), vol = parseFloat(c.dayNtlVlm);
-        if (a.isDelisted || !(px > 0) || !(prev > 0) || !(vol >= 5_000_000)) return;
-        const ch = (px / prev - 1) * 100;
-        if (ch <= 3) return;
-        const sym = a.name.startsWith("k") && a.name.length > 2 && a.name[1] === a.name[1].toUpperCase() ? a.name.slice(1) : a.name;
-        out.set(`hl-${a.name}`, { id: "", symbol: sym, name: sym, price: a.name !== sym ? px / 1000 : px, ch24: ch, volume: vol, rank: null,
-          why: "top 24 h gainer on Hyperliquid" });
-      });
-    } catch (e) { errors.push(`hyperliquid ${(e as Error).message}`); }
+      const t = await fetch("https://api.coingecko.com/api/v3/search/trending", { headers: UA, next: { revalidate: 300 } });
+      if (t.ok) trending = new Set(((await t.json()).coins || []).map((c: { item: { symbol: string } }) => String(c.item.symbol).toUpperCase()));
+    } catch { /* trending is only a tag */ }
+
+    const coins: Hot[] = [];
+    (meta.universe as { name: string; isDelisted?: boolean }[]).forEach((a, i) => {
+      const c = ctxs[i] || {};
+      const px = parseFloat(c.midPx || c.markPx), prev = parseFloat(c.prevDayPx), vol = parseFloat(c.dayNtlVlm);
+      if (a.isDelisted || !(px > 0) || !(prev > 0) || !(vol >= 3_000_000)) return;
+      const ch = (px / prev - 1) * 100;
+      const kilo = /^k[A-Z0-9]/.test(a.name);                 // kPEPE, kBONK...: priced per 1,000 tokens
+      const symbol = kilo ? a.name.slice(1) : a.name;
+      const isTrending = trending.has(symbol);
+      if (ch <= 2 && !(isTrending && ch > 0)) return;
+      coins.push({ hl: a.name, symbol, scale: kilo ? 1000 : 1, price: kilo ? px / 1000 : px, ch24: ch, volume: vol,
+        why: isTrending ? "trending on CoinGecko and up on Hyperliquid" : "a top 24 h gainer on Hyperliquid", trending: isTrending });
+    });
+    coins.sort((a, b) => Number(b.trending) - Number(a.trending) || b.ch24 - a.ch24);
+    return NextResponse.json({ coins: coins.slice(0, 40), at: Date.now() },
+      { headers: { "Cache-Control": "public, s-maxage=120, stale-while-revalidate=300" } });
+  } catch (e) {
+    return NextResponse.json({ coins: [], error: (e as Error).message || "No hot coins right now" }, { status: 502 });
   }
-  const coins = [...out.values()];
-  if (!coins.length) return NextResponse.json({ coins, error: errors.join("; ") || "No hot coins right now" }, { status: errors.length ? 502 : 200 });
-  return NextResponse.json({ coins, errors }, { headers: { "Cache-Control": "public, s-maxage=120, stale-while-revalidate=300" } });
 }
