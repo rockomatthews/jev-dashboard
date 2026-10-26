@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
-// "Hot" coins for Hot Potato: Hyperliquid coins that are up on the day with real volume, so every coin tossed can be
-// priced live from Hyperliquid's mid-price stream. Coins also trending on CoinGecko are tagged and go first.
+// "Hot" coins for Hot Potato: the day's strongest Hyperliquid coins with real volume (everything up 2%+, at least the
+// top 20), so every coin tossed can be priced live from Hyperliquid's mid-price stream. Coins also trending on
+// CoinGecko are tagged and go first.
 // Cached about 2 minutes on the server.
 export const runtime = "nodejs";
 
@@ -33,12 +34,16 @@ export async function GET() {
       const kilo = /^k[A-Z0-9]/.test(a.name);                 // kPEPE, kBONK...: priced per 1,000 tokens
       const symbol = kilo ? a.name.slice(1) : a.name;
       const isTrending = trending.has(symbol);
-      if (ch <= 2 && !(isTrending && ch > 0)) return;
       coins.push({ hl: a.name, symbol, scale: kilo ? 1000 : 1, price: kilo ? px / 1000 : px, ch24: ch, volume: vol,
         why: isTrending ? "trending on CoinGecko and up on Hyperliquid" : "a top 24 h gainer on Hyperliquid", trending: isTrending });
     });
-    coins.sort((a, b) => Number(b.trending) - Number(a.trending) || b.ch24 - a.ch24);
-    return NextResponse.json({ coins: coins.slice(0, 40), at: Date.now() },
+    // the day's best performers: everything up 2%+, topped up to at least 20 coins with the next strongest, and
+    // CoinGecko-trending coins that are up at all
+    coins.sort((a, b) => b.ch24 - a.ch24);
+    const pick = coins.filter((c, i) => c.ch24 > 2 || i < 20 || (c.trending && c.ch24 > 0)).slice(0, 40);
+    for (const c of pick) if (c.ch24 <= 2 && !c.trending) c.why = "one of the day's 20 strongest coins on Hyperliquid";
+    pick.sort((a, b) => Number(b.trending) - Number(a.trending) || b.ch24 - a.ch24);
+    return NextResponse.json({ coins: pick, at: Date.now() },
       { headers: { "Cache-Control": "public, s-maxage=120, stale-while-revalidate=300" } });
   } catch (e) {
     return NextResponse.json({ coins: [], error: (e as Error).message || "No hot coins right now" }, { status: 502 });

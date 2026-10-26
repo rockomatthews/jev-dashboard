@@ -302,6 +302,7 @@ th { color: var(--muted); font-weight: 700; font-size: 11px; letter-spacing: .08
         c.className = "card empty"; c.textContent = G.cash >= TICKET ? "Empty hand. Hit the button to catch one." : "Empty hand (not enough cash for a toss).";
         box.appendChild(c); return;
       }
+      c.className = "card";
       c.dataset.slot = i;
       c.innerHTML = `<div class="ctop"><div style="min-width:0"><div class="sym"></div><div class="px"></div></div><div class="pl"></div></div>
         <canvas width="520" height="168" aria-label="Price since you caught it"></canvas>
