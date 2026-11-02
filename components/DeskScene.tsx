@@ -29,12 +29,26 @@ export type TrenchWatch = { mint: string; symbol: string; agent: string; since_m
   facts: Record<string, number | string | null> | null };
 export type TrenchInfo = { watch: TrenchWatch[]; holders: Record<string, { peak: number; last: number; ms: number }>;
   kols_known: number; rules: Record<string, number>; tools: [string, string, string][] };
+export type PumpLayer = { n: number; name: string; pass: boolean | null; value: string; source: string; ms: number };
+export type PumpInfo = {
+  funnel: [string, number, string][];
+  room: { mint: string; symbol: string; agent: string; waited_min: number; age_min: number | null; liq: number | null; h1: number | null; creator: boolean }[];
+  room_size: number;
+  audits: { mint: string; symbol: string; ts: number; passed: boolean; layersChecked: number; layers: PumpLayer[]; holders: number | null; reason: string | null }[];
+  verdicts: { mint: string; symbol: string; ts: number; answers: Record<string, number> | null; score: number; passed: boolean; failed: string[]; model: string }[];
+  kills: [string, number][]; refusals: [string, number][]; rejects: [string, number][]; executor_skips: [string, number][];
+  feed: { connected: boolean; heard: number; last_msg_ms: number; reconnects_1h: number; last_error: string };
+  analyst: { mode: string; via: string; model: string; calls: number; errors: number; input_tokens: number; why_rules: string; last_error: string };
+  layer8: { down: boolean; down_ms: number; ok_ms: number };
+  runners: number; rules: Record<string, number>; below_min: string;
+};
 export type DeskInfo = {
   report: DeskReport; report_text: string; tasks: DeskTask[]; events: string[];
   session: { day: string; start: number; halted: boolean; halt_at: number };
   grok: { via: string; calls: number | null; searched: number | null; no_search: number | null; errors: number | null;
     last_error: string; calls_last_hour: number; budget_per_hour: number } | null;
   trench?: TrenchInfo;
+  pump?: PumpInfo;
   source_errors: Record<string, number>;
   config: {
     model: string; start_balance: number; scanners: string[]; leads_per_run: number; scan_every_s: number; whales: number;

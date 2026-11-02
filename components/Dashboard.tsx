@@ -7,7 +7,7 @@ import BacktestLab, { SLIDE_TO_BACKTEST } from "./BacktestLab";
 import type { CopyBlock, CopyInfo } from "./CopyScene";
 import type { LotInfo } from "./LotScene";
 import { reachedAtLeast, type MoonInfo } from "./MoonshotScene";
-import type { DeskInfo, DeskPosition, TrenchInfo } from "./DeskScene";
+import type { DeskInfo, DeskPosition, PumpInfo, TrenchInfo } from "./DeskScene";
 import type { OneInfo } from "./OneCoinScene";
 import type { ThetaInfo } from "./ThetaScene";
 import { ago, arrow, num, pct, polarity, price, signedUsd, usd, when } from "@/lib/format";
@@ -108,6 +108,11 @@ function buildSlides(perf: Performance): Slide[] {
     ? [{ key: "trenchkit", n: 36, name: "Trench Kit",
         blurb: "the trencher's 13 free tools as code · Rugcheck insiders, trench.bot bundles, dev wallet, kolscan KOLs, GeckoTerminal flow · short confirm: holders must grow · −30% stop, half at +60%, 30% trail · no trade for an hour → the best near-miss · paper, own $10k" }]
     : [];
+  const pumpPerf = (perf.strategies as Record<string, Performance | undefined> | undefined)?.pumpdesk;
+  const pump: Slide[] = (pumpPerf as unknown as { desk?: { pump?: unknown } } | undefined)?.desk?.pump
+    ? [{ key: "pumpdesk", n: 44, name: "Pump Desk",
+        blurb: "savip's five agents on every pump.fun graduate · SCANNER (PumpPortal stream) → AUDITOR (8 layers, one red kills) → ANALYST (Jev's 4 closed questions, gate in code) → EXECUTOR (8% of stack, ≤ 2% of pool) → RISK (−6% stop, 12% trail from +20%, 3 h dead money) · paper, own $10k" }]
+    : [];
   const onePerf = (perf.strategies as Record<string, Performance | undefined> | undefined)?.onecoin;
   const one: Slide[] = (onePerf as unknown as { onecoin?: unknown } | undefined)?.onecoin
     ? [{ key: "onecoin", n: 38, name: "One Coin",
@@ -118,7 +123,7 @@ function buildSlides(perf: Performance): Slide[] {
     ? [{ key: "thetashop", n: 41, name: "Theta Shop",
         blurb: "the only options book · sells a weekly Bitcoin iron condor on Deribit · paid when BTC stays in a range, loss capped the moment it opens · take profit at half the credit, stop at 2x · paper, own $10k" }]
     : [];
-  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...hive, ...copy, ...lot, ...moon, ...desk, ...trench, ...one, ...theta];
+  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...hive, ...copy, ...lot, ...moon, ...desk, ...trench, ...pump, ...one, ...theta];
 }
 
 function Pol({ v, children }: { v: number; children: React.ReactNode }) {
@@ -325,6 +330,134 @@ const DESK_STEP: Record<string, string> = { scan: "SCAN", verify: "VERIFY", watc
 
 const TOOL_STATE: Record<string, string> = { used: "pol pol--gain", covered: "pol pol--flat", "not used": "pol pol--loss" };
 
+function PumpHeader({ p, D, now }: { p: Performance; D: DeskInfo; now: number }) {
+  const P = D.pump as PumpInfo;
+  const R = P.rules;
+  const A = P.analyst;
+  const strip = (pass: boolean | null) => ({
+    display: "inline-block", width: 14, height: 14, borderRadius: 3, marginRight: 3,
+    background: pass === true ? "var(--gain, #3ecf8e)" : pass === false ? "var(--loss, #ff5470)" : "rgba(140,150,170,.25)",
+  });
+  const k = (x: number | null | undefined) => (x === null || x === undefined ? "—" : x >= 1e6 ? `$${num(x / 1e6, 2)}M` : `$${num(x / 1000, 1)}K`);
+  return (
+    <>
+      <section className="panel">
+        <h2>Strategy 44 <span className="panel__hint">Pump Desk · savip&apos;s five agents on every pump.fun graduate · paper · own {usd(p.start_balance, false)}</span></h2>
+        <p className="strategy__what">
+          savip&apos;s &quot;5 Agents, 1 App, 1 Prompt&quot; desk, built as a paper book. SCANNER hears every coin that graduates
+          off the pump.fun curve onto PumpSwap (PumpPortal&apos;s free migration stream) and puts it in a waiting room.
+          Once the pool is {R.min_pool_age_min} minutes old it needs {k(R.min_liquidity_usd)} of liquidity, no more than
+          +{R.max_h1_change_pct}% in the hour, no copycat name and top 10 holders under {R.scan_max_top10_pct}%; after
+          {" "}{R.max_wait_min} minutes it is dropped. AUDITOR then takes it apart in 8 layers, and one red layer kills it:
+          mint and freeze authority revoked, the dev under {R.max_dev_pct}% and never sold, top 10 under {R.max_top10_pct}%,
+          the pool&apos;s LP at least {R.min_lp_locked_pct}% burned or locked, the pool old enough, fewer than {R.max_bundled} wallets
+          tied together in Rugcheck&apos;s insider graph, and no delegate controlling {R.max_delegated_accounts}+ holder accounts
+          (read over your own Solana RPC). ANALYST asks Jev four yes/no questions and code applies the gate. EXECUTOR
+          sizes {Math.round(R.size_pct * 100)}% of the stack, capped at {Math.round(R.max_pool_pct * 100)}% of the pool. RISK
+          watches every 15 seconds. The article&apos;s app, Telegram buttons and copy bot are its front end; this book is the engine.
+        </p>
+        <div className="rules">
+          <span className="rule">pool ≥ {k(R.min_liquidity_usd)} at {R.min_pool_age_min} min</span>
+          <span className="rule">≤ +{R.max_h1_change_pct}% in 1 h · no copycat</span>
+          <span className="rule">8 layers, one red = dead</span>
+          <span className="rule">Jev: alive ≥ {R.min_alive_6h} · organic ≥ {R.min_organic} · chase ≤ {R.max_chase} · score ≥ {R.min_score}</span>
+          <span className="rule">{Math.round(R.size_pct * 100)}% of stack · ≤ {Math.round(R.max_pool_pct * 100)}% of pool · ${num(R.min_ticket, 2)} floor ({P.below_min})</span>
+          <span className="rule rule--loss">stop {R.hard_stop_pct}%</span>
+          <span className="rule rule--gain">trail {R.trail_pct}% from +{R.trail_start_pct}%</span>
+          <span className="rule">{R.time_stop_min / 60} h under +{R.time_stop_min_pct}% = dead money</span>
+          <span className="rule">FOMO fees, {Math.round(R.fees_ref_discount * 100)}% ref discount · pool fee {num(R.dex_fee * 100, 2)}%</span>
+        </div>
+        <p className="muted">
+          Stream: {P.feed.connected ? "connected" : `down (${P.feed.last_error || "reconnecting"})`} · {P.feed.heard} graduates heard
+          {P.feed.last_msg_ms ? `, last ${ago(P.feed.last_msg_ms, now)}` : ""} · {P.feed.reconnects_1h} reconnects this hour
+          {" · "}Analyst: {A.mode === "jev" ? `Jev (${A.model} via ${A.via}) · ${A.calls} calls${A.errors ? `, ${A.errors} errors` : ""}` : `RULES mode (${A.why_rules})`}
+          {P.layer8.down ? " · ⛔ AUDITOR layer 8 is down: your RPC refused getProgramAccounts, so every coin is red" : ""}
+          {Object.keys(D.source_errors).length ? ` · source errors: ${Object.entries(D.source_errors).map(([a, b]) => `${a} ${b}`).join(", ")}` : ""}
+        </p>
+      </section>
+
+      <div className="grid2">
+        <section className="panel">
+          <h2>The waiting room <span className="panel__hint">{P.room_size} graduates · judged at {R.min_pool_age_min} min of pool age</span></h2>
+          {P.room.length === 0 ? <p className="empty">Listening for graduations.</p> : (
+            <table>
+              <thead><tr><th>Coin</th><th className="r">Pool age</th><th className="r">Liquidity</th><th className="r">1 h</th><th className="r">Waited</th></tr></thead>
+              <tbody>
+                {P.room.slice(0, 14).map((w) => (
+                  <tr key={w.mint}>
+                    <td className="coin">{w.symbol}</td>
+                    <td className="r">{w.age_min === null ? "—" : `${num(w.age_min, 0)} min`}</td>
+                    <td className="r">{k(w.liq)}</td>
+                    <td className="r">{w.h1 === null ? "—" : <Pol v={w.h1}>{`${w.h1 > 0 ? "+" : ""}${num(w.h1, 0)}%`}</Pol>}</td>
+                    <td className="r">{num(w.waited_min, 0)} min</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+        <section className="panel">
+          <h2>Why coins died <span className="panel__hint">every kill, refusal and reject, by rule</span></h2>
+          <table>
+            <tbody>
+              {P.kills.length + P.refusals.length + P.rejects.length + P.executor_skips.length === 0 && <tr><td className="muted">nothing yet</td></tr>}
+              {P.kills.map(([why, n]) => <tr key={`k${why}`}><td className="muted">SCANNER</td><td>{why}</td><td className="r">{n}</td></tr>)}
+              {P.refusals.map(([why, n]) => <tr key={`a${why}`}><td className="muted">AUDITOR</td><td>{why}</td><td className="r">{n}</td></tr>)}
+              {P.rejects.map(([why, n]) => <tr key={`r${why}`}><td className="muted">ANALYST</td><td>{why}</td><td className="r">{n}</td></tr>)}
+              {P.executor_skips.map(([why, n]) => <tr key={`e${why}`}><td className="muted">EXECUTOR</td><td>{why}</td><td className="r">{n}</td></tr>)}
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <div className="grid2">
+        <section className="panel">
+          <h2>AUDITOR · last coins taken apart <span className="panel__hint">8 layers in order · grey = not checked after a red</span></h2>
+          {P.audits.length === 0 ? <p className="empty">No coin taken apart yet.</p> : (
+            <table>
+              <tbody>
+                {P.audits.map((a) => {
+                  const red = a.layers.find((l) => l.pass === false);
+                  return (
+                    <tr key={`${a.mint}${a.ts}`}>
+                      <td className="coin">{a.symbol}</td>
+                      <td style={{ whiteSpace: "nowrap" }}>{a.layers.map((l) => <i key={l.n} style={strip(l.pass)} title={`${l.n} ${l.name}: ${l.value}`} />)}</td>
+                      <td className="why" title={a.layers.map((l) => `${l.n} ${l.name}: ${l.value}`).join("\n")}>
+                        {a.passed ? <span className="pol pol--gain">8/8 → analyst{a.holders ? ` · ${a.holders} holders` : ""}</span> : <span className="pol pol--loss">{red ? `${red.name}: ${red.value}` : a.reason}</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </section>
+        <section className="panel">
+          <h2>ANALYST · last verdicts <span className="panel__hint">{A.mode === "jev" ? "Jev's probabilities, gate in code" : "rules mode"} · score ≥ {R.min_score} goes to EXECUTOR</span></h2>
+          {P.verdicts.length === 0 ? <p className="empty">Nothing has reached the analyst yet.</p> : (
+            <table>
+              <thead><tr><th>Coin</th><th className="r">Alive 6h</th><th className="r">Organic</th><th className="r">Flush</th><th className="r">Chase</th><th className="r">Score</th></tr></thead>
+              <tbody>
+                {P.verdicts.map((v) => {
+                  const a = v.answers ?? {};
+                  const f = (key: string) => (a[key] === undefined ? "—" : num(a[key], 2));
+                  return (
+                    <tr key={`${v.mint}${v.ts}`} title={v.failed.join(", ")}>
+                      <td className="coin">{v.symbol}</td><td className="r">{f("alive_6h")}</td><td className="r">{f("organic")}</td>
+                      <td className="r">{f("flush")}</td><td className="r">{f("chase")}</td>
+                      <td className="r"><span className={`pol pol--${v.passed ? "gain" : "loss"}`}>{v.answers ? v.score : "no answer"}</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </section>
+      </div>
+    </>
+  );
+}
+
 function TrenchHeader({ p, D, now }: { p: Performance; D: DeskInfo; now: number }) {
   const T = D.trench as TrenchInfo;
   const R = T.rules;
@@ -409,10 +542,11 @@ function DeskPanels({ p, D, now }: { p: Performance; D: DeskInfo; now: number })
   const r = D.report;
   const c = D.config;
   const trench = !!D.trench;
+  const pump = !!D.pump;
   const hardSkips = Math.max(0, r.verified - r.passed_hard);
   const grokSkips = Math.max(0, r.passed_hard - r.fills);
   const positions = (p.positions ?? []) as unknown as DeskPosition[];
-  const funnel: [string, number, string][] = trench ? [
+  const funnel: [string, number, string][] = pump ? (D.pump as PumpInfo).funnel : trench ? [
     ["LEADS · GeckoTerminal", r.leads, "Solana trending and new pools"],
     ["CHECK · finished", r.verified, "each coin once: a skip is final"],
     ["CHECK · passed every tool", r.passed_hard, "Rugcheck, trench.bot, dev wallet, kolscan, GeckoTerminal flow"],
@@ -430,7 +564,7 @@ function DeskPanels({ p, D, now }: { p: Performance; D: DeskInfo; now: number })
   const top = Math.max(1, r.leads);
   return (
     <>
-      {trench ? <TrenchHeader p={p} D={D} now={now} /> : (
+      {pump ? <PumpHeader p={p} D={D} now={now} /> : trench ? <TrenchHeader p={p} D={D} now={now} /> : (
       <section className="panel">
         <h2>Strategy 34 <span className="panel__hint">Grok Desk · SCAN → VERIFY → EXECUTE → EXIT · paper · own {usd(c.start_balance, false)}</span></h2>
         <p className="strategy__what">
@@ -481,7 +615,7 @@ function DeskPanels({ p, D, now }: { p: Performance; D: DeskInfo; now: number })
               </div>
             ))}
           </div>
-          <p className="muted">{hardSkips} killed by {trench ? "a tool" : "a hard check"}, {grokSkips} {trench ? "failed the 10-minute confirm" : "turned down by Grok"}, {r.tasks} tasks logged in all.</p>
+          <p className="muted">{pump ? `${r.leads} graduates heard, ${r.fills} bought, ${r.tasks} tasks logged in all.` : `${hardSkips} killed by ${trench ? "a tool" : "a hard check"}, ${grokSkips} ${trench ? "failed the 10-minute confirm" : "turned down by Grok"}, ${r.tasks} tasks logged in all.`}</p>
           <h2 style={{ marginTop: 14 }}>Top skip reasons</h2>
           <table>
             <tbody>
@@ -1912,6 +2046,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const deskPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.grokdesk;
   const deskInfo = (deskPerf as unknown as { desk?: DeskInfo } | undefined)?.desk;
   const isTrench = slideKey === "trenchkit";
+  const isPump = slideKey === "pumpdesk";
   const isOne = slideKey === "onecoin";
   const isTheta = slideKey === "thetashop";
   const thetaPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.thetashop;
@@ -1920,6 +2055,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const oneInfo = (onePerf as unknown as { onecoin?: OneInfo } | undefined)?.onecoin;
   const trenchPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.trenchkit;
   const trenchInfo = (trenchPerf as unknown as { desk?: DeskInfo } | undefined)?.desk;
+  const pumpPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.pumpdesk;
+  const pumpInfo = (pumpPerf as unknown as { desk?: DeskInfo } | undefined)?.desk;
   const isMeta = slideKey === "metasniper" || isRug || isHive || isCopy;
   const metaPerf = data.perf.strategies?.metasniper;
   const rugPerf = data.perf.strategies?.rugsniper;
@@ -1929,7 +2066,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const ideaPerf = slideKey.startsWith("idea:") ? data.perf.strategies?.[slideKey as `idea:${string}`] : undefined;
   const idea = ideaPerf?.idea;
   const isIdea = !!(ideaPerf && idea);
-  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isRug && rugPerf ? rugPerf : isHive && hivePerf ? hivePerf : isCopy && copyPerf ? copyPerf : isLot && lotPerf ? lotPerf : isMoon && moonPerf ? moonPerf : isDesk && deskPerf ? deskPerf : isTrench && trenchPerf ? trenchPerf : isOne && onePerf ? onePerf : isTheta && thetaPerf ? thetaPerf : isMeta && metaPerf ? metaPerf
+  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isRug && rugPerf ? rugPerf : isHive && hivePerf ? hivePerf : isCopy && copyPerf ? copyPerf : isLot && lotPerf ? lotPerf : isMoon && moonPerf ? moonPerf : isDesk && deskPerf ? deskPerf : isTrench && trenchPerf ? trenchPerf : isPump && pumpPerf ? pumpPerf : isOne && onePerf ? onePerf : isTheta && thetaPerf ? thetaPerf : isMeta && metaPerf ? metaPerf
     : isIdea ? (ideaPerf as Performance) : data.perf;
   const meta = isMeta && p.sniper ? (p.sniper as unknown as MetaInfo) : undefined;
   const kal = isKalshi ? p.kalshi : undefined;
@@ -1980,6 +2117,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               : isKalshi ? "paper trading · Kalshi prediction markets · public order books + trade tape"
               : isTheta ? "paper trading · Deribit BTC options · a weekly iron condor, paid when Bitcoin stays in a range"
               : isOne ? "paper trading · Hyperliquid · one rising coin at a time, held until it should be dropped or it peaks"
+              : isPump ? "paper trading · pump.fun graduates on PumpSwap · five agents: scanner, 8-layer auditor, Jev analyst, executor, risk"
               : isTrench ? "paper trading · Solana memecoins · the trencher's free tools as code, then a 10-minute holder-growth confirm"
               : isDesk ? "paper trading · Solana memecoins · four agents, four steps: scan, verify (code, then Grok on X), execute, exit"
               : isMoon ? "paper trading · Papertrade's rules (papertrade.xyz) on live Hyperliquid BTC · $100 tries, counted"
@@ -2014,6 +2152,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : s.key === "moonshot" ? null
           : s.key === "grokdesk" ? (deskPerf?.equity ?? null)
           : s.key === "trenchkit" ? (trenchPerf?.equity ?? null)
+          : s.key === "pumpdesk" ? (pumpPerf?.equity ?? null)
           : s.key === "onecoin" ? (onePerf?.equity ?? null)
           : s.key === "thetashop" ? (thetaPerf?.equity ?? null)
             : data.perf.strategies?.[s.key as `idea:${string}`]?.equity ?? null)} />
@@ -2043,7 +2182,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
                 </div>
               </>
             ) : (<>
-            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isRug ? "Strategy 23 paper equity" : isHive ? "Strategy 33 paper equity" : isDesk ? "Strategy 34 paper equity" : isTrench ? "Strategy 36 paper equity" : isOne ? `Strategy 38 · round ${oneInfo?.round ?? 1} equity` : isTheta ? "Strategy 41 paper equity" : isCopy ? "Strategy 25 paper equity" : isLot ? "Strategy 26 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
+            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isRug ? "Strategy 23 paper equity" : isHive ? "Strategy 33 paper equity" : isDesk ? "Strategy 34 paper equity" : isTrench ? "Strategy 36 paper equity" : isPump ? "Strategy 44 paper equity" : isOne ? `Strategy 38 · round ${oneInfo?.round ?? 1} equity` : isTheta ? "Strategy 41 paper equity" : isCopy ? "Strategy 25 paper equity" : isLot ? "Strategy 26 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
             <div className="hero__equity">{usd(p.equity)}</div>
             <div className="hero__pnl">
               <Pol v={p.pnl}>{arrow(p.pnl)} {signedUsd(p.pnl)} ({pct(p.pnl_pct, 2, true)})</Pol>
@@ -2075,6 +2214,14 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               <span><i className="swatch swatch--held" /> highest price since the entry</span>
               <span><i className="swatch swatch--gain" /> give-back exit (armed at +4%)</span>
               <span className="legend__note">ring: today&apos;s strongest liquid Hyperliquid movers, pillar height = 4-hour rise · middle: the one coin held, the orb climbs at the live price from the stop ring past the entry line · right: one red disc per round that fell under $5k · drag to orbit, hover a pillar</span>
+            </div>
+          ) : isPump ? (
+            <div className="legend" aria-label="Legend">
+              <span><i className="swatch swatch--carry-low" /> graduate heard</span>
+              <span><i className="swatch swatch--loss" /> killed by the scanner or an audit layer</span>
+              <span><i className="swatch swatch--held" /> passed 8/8, the analyst said no</span>
+              <span><i className="swatch swatch--gain" /> filled · open position</span>
+              <span className="legend__note">one rail: PUMPPORTAL (GECKO-NEW when the stream is quiet) → AUDITOR&apos;s 8 layers → ANALYST (Jev) → EXECUTOR → RISK · over RISK: open positions at the height of their move · hover a bead or a position</span>
             </div>
           ) : isTrench ? (
             <div className="legend" aria-label="Legend">
@@ -2188,6 +2335,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : isTheta ? "3D payoff tent of the open Bitcoin iron condor, with Bitcoin's price now"
           : isOne ? "3D field of rising Hyperliquid coins around the one coin held, with its stop, peak and give-back levels"
           : isTrench ? "3D rail: every recent lead riding from GeckoTerminal through the free tools to the confirm"
+          : isPump ? "3D rail: every recent pump.fun graduate riding from the scanner through the 8-layer audit and Jev's analyst"
           : isDesk ? "3D trading desk rail: every recent lead riding from its scanner to the step where it ended"
           : isMoon ? "3D launch towers: each lane's $100 try climbing log-scale rungs toward $1M, with its bust and take-profit levels"
           : isLot ? "3D lot elevator: every coin's $50 lots at their entry prices around the live price"
@@ -2238,6 +2386,12 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         {visited.onecoin && oneInfo && (
           <div className={`scene__layer ${isOne ? "scene__layer--on" : ""}`} aria-hidden={!isOne}>
             <OneCoinScene info={oneInfo} active={isOne} />
+          </div>
+        )}
+        {visited.pumpdesk && pumpInfo && (
+          <div className={`scene__layer ${isPump ? "scene__layer--on" : ""}`} aria-hidden={!isPump}>
+            <DeskScene info={pumpInfo} positions={(pumpPerf?.positions ?? []) as unknown as DeskPosition[]} active={isPump}
+              stations={{ verify: "AUDITOR · 8 layers", second: "ANALYST · Jev", secondRe: /^analyst/ }} />
           </div>
         )}
         {visited.trenchkit && trenchInfo && (
@@ -2302,6 +2456,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : isMeta && meta ? <MetaPanels p={p} m={meta} now={now} />
           : isDesk && deskInfo ? <DeskPanels p={p} D={deskInfo} now={now} />
           : isTrench && trenchInfo ? <DeskPanels p={p} D={trenchInfo} now={now} />
+          : isPump && pumpInfo ? <DeskPanels p={p} D={pumpInfo} now={now} />
           : isOne && oneInfo ? <OnePanels p={p} O={oneInfo} now={now} />
           : isTheta && thetaInfo ? <ThetaPanels p={p} T={thetaInfo} now={now} />
           : isIdea && idea ? <IdeaPanels p={p} idea={idea} /> : <TrendPanels p={p} />}
@@ -2455,6 +2610,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             ? "Paper trading only — no order reaches Deribit. Every leg is priced at Deribit's live bid (selling) or ask (buying) with Deribit's option fee, and an unclosed condor settles at Deribit's 08:00 UTC delivery price. The most a condor can lose is fixed when it opens. Not investment advice."
             : isOne
             ? "Paper trading only — no order reaches Hyperliquid. Buys and sells walk Hyperliquid's live order book and pay the 4.5 bp taker fee; funding is paid or received every hour at the exchange's rate. 1x long, no leverage. The total counts every $10k round put in. Not investment advice."
+            : isPump
+            ? "Paper trading only — no key that can move money, no wallet, no FOMO account, no real order. Fills are simulated on the real PumpSwap pool: AMM price impact, FOMO's fee schedule with the 10% referral discount, and the 0.25% pool fee; FOMO pays gas. 8 clean layers make a rug rarer, not impossible, and most graduates still go to zero. Not investment advice."
             : isTrench
             ? "Paper trading only — no key, no wallet, no real order. Fills are simulated against the real DexScreener pool: AMM price impact, 0.25% DEX fee, $0.10 priority fee and 2% latency slippage. The tools are fact filters, not guarantees: a coin that passes all 13 can still go to zero. Not investment advice."
             : isDesk
