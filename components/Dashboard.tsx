@@ -113,6 +113,11 @@ function buildSlides(perf: Performance): Slide[] {
     ? [{ key: "pumpdesk", n: 44, name: "Pump Desk",
         blurb: "savip's five agents on every pump.fun graduate · SCANNER (PumpPortal stream) → AUDITOR (8 layers, one red kills) → ANALYST (Jev's 4 closed questions, gate in code) → EXECUTOR (8% of stack, ≤ 2% of pool) → RISK (−6% stop, 12% trail from +20%, 3 h dead money) · paper, own $10k" }]
     : [];
+  const fadePerf = (perf.strategies as Record<string, Performance | undefined> | undefined)?.openfade;
+  const fade: Slide[] = (fadePerf as unknown as { fade?: unknown } | undefined)?.fade
+    ? [{ key: "openfade", n: 46, name: "Open Fade",
+        blurb: "crypto stocks vs their coin at the 9:30 open · the gap prices ~90% of the coin's overnight move × beta · ≥ 2% left unpriced → trade the laggard, hedged in the coin's Hyperliquid perp, out at the close · weeknights only · 13 smaller miners + treasury companies · paper, own $10k" }]
+    : [];
   const onePerf = (perf.strategies as Record<string, Performance | undefined> | undefined)?.onecoin;
   const one: Slide[] = (onePerf as unknown as { onecoin?: unknown } | undefined)?.onecoin
     ? [{ key: "onecoin", n: 38, name: "One Coin",
@@ -123,7 +128,7 @@ function buildSlides(perf: Performance): Slide[] {
     ? [{ key: "thetashop", n: 41, name: "Theta Shop",
         blurb: "the only options book · sells a weekly Bitcoin iron condor on Deribit · paid when BTC stays in a range, loss capped the moment it opens · take profit at half the credit, stop at 2x · paper, own $10k" }]
     : [];
-  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...hive, ...copy, ...lot, ...moon, ...desk, ...trench, ...pump, ...one, ...theta];
+  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...hive, ...copy, ...lot, ...moon, ...desk, ...trench, ...pump, ...fade, ...one, ...theta];
 }
 
 function Pol({ v, children }: { v: number; children: React.ReactNode }) {
@@ -329,6 +334,140 @@ function OnePanels({ p, O, now }: { p: Performance; O: OneInfo; now: number }) {
 const DESK_STEP: Record<string, string> = { scan: "SCAN", verify: "VERIFY", watch: "WATCH", execute: "EXECUTE", limits: "EXECUTE · limits", exit: "EXIT", quota: "EXECUTE · hourly quota" };
 
 const TOOL_STATE: Record<string, string> = { used: "pol pol--gain", covered: "pol pol--flat", "not used": "pol pol--loss" };
+
+type FadeCandidate = { symbol: string; coin: string; beta: number | null; skip?: string; taken?: string; prev_close?: number;
+  open?: number; gap?: number; coin_move?: number; unpriced?: number; now?: number; coin_now?: number };
+type FadeTrade = Record<string, string>;
+type FadeInfo = {
+  today: { date: string; status: string; why: string; candidates: FadeCandidate[] };
+  days: { date: string; status: string; why: string; taken: number }[];
+  trades: FadeTrade[]; events: string[]; by_side: Record<string, { n: number; pnl: number }>;
+  universe: Record<string, string>; selfcheck: string; source_errors: Record<string, number>; last_error: string;
+  rules: Record<string, number>; research: Record<string, string>;
+};
+
+/** The gap board: one row per stock, its opening gap (bar) against what the coin's overnight move x beta said it
+ *  should be (tick). The space between them is the unpriced gap; past the threshold it is traded. */
+function FadeBoard({ F }: { F: FadeInfo }) {
+  const k = F.rules.min_unpriced ?? 0.02;
+  const rows = F.today.candidates.filter((c) => c.gap !== undefined && c.coin_move !== undefined && c.beta !== null);
+  const span = Math.max(0.04, ...rows.map((c) => Math.max(Math.abs(c.gap as number), Math.abs((c.beta as number) * (c.coin_move as number)))));
+  const X = (v: number) => 50 + (v / span) * 45;
+  return (
+    <div style={{ position: "absolute", inset: 0, padding: "28px 7%", overflow: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="scene-title">OPEN FADE · {F.today.date} · {F.today.status.toUpperCase()}{F.today.why ? ` · ${F.today.why.toUpperCase()}` : ""}</div>
+      {rows.length === 0 ? (
+        <div className="scene-loading">{F.today.status === "pending" ? "Waiting for the 9:30 open (decided 9:32-9:50 ET on weeknights)" : "No gaps measured today."}</div>
+      ) : rows.map((c) => {
+        const gap = c.gap as number, fair = (c.beta as number) * (c.coin_move as number), u = c.unpriced as number;
+        const hot = Math.abs(u) >= k;
+        return (
+          <div key={c.symbol} style={{ display: "grid", gridTemplateColumns: "70px 1fr 110px", alignItems: "center", gap: 10, fontFamily: "var(--mono)", fontSize: 12 }}>
+            <span style={{ color: c.taken ? "var(--ink)" : "var(--ink-3)" }}>{c.symbol}<span style={{ color: "var(--ink-3)" }}> · {c.coin}</span></span>
+            <svg viewBox="0 0 100 10" preserveAspectRatio="none" style={{ width: "100%", height: 18 }}>
+              <line x1="50" x2="50" y1="0" y2="10" stroke="rgba(140,150,170,.4)" strokeWidth="0.3" />
+              <rect x={Math.min(X(0), X(gap))} y="2.5" width={Math.abs(X(gap) - X(0))} height="5" fill={gap >= 0 ? "rgba(62,207,142,.55)" : "rgba(255,84,112,.55)"} />
+              <line x1={X(fair)} x2={X(fair)} y1="0" y2="10" stroke="#ffc94d" strokeWidth="0.8" />
+              {hot && <line x1={X(gap)} x2={X(fair)} y1="5" y2="5" stroke="#ffc94d" strokeWidth="0.5" strokeDasharray="1 0.6" />}
+            </svg>
+            <span className={`pol pol--${c.taken ? (u > 0 ? "gain" : "loss") : "flat"}`}>{c.taken ? `${c.taken.toUpperCase()} ` : ""}{u > 0 ? "+" : ""}{num(u * 100, 1)}%</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function FadePanels({ p, F }: { p: Performance; F: FadeInfo }) {
+  const R = F.rules;
+  const cands = F.today.candidates;
+  return (
+    <>
+      <section className="panel">
+        <h2>Strategy 46 <span className="panel__hint">Open Fade · crypto stocks&apos; opening gap vs their coin&apos;s overnight move · paper · own {usd(p.start_balance, false)}</span></h2>
+        <p className="strategy__what">
+          From the deep dive on stocks that hold or live off crypto. At the 9:30 open, a crypto stock&apos;s gap prices only
+          about 90% of what its coin did overnight times the stock&apos;s beta to that coin. The rest tends to arrive by
+          the close. Each weeknight-to-morning (never after a weekend or holiday), the book measures that unpriced gap for
+          13 smaller miners and treasury companies. Where it is {num(R.min_unpriced * 100, 0)}% or more, it takes the
+          side that is behind (most of the edge is shorting stocks that opened too high), hedges beta times the stake in
+          the coin&apos;s Hyperliquid perp, and closes at the bell. The big names on Hyperliquid&apos;s 24/7 stock perps
+          (MSTR, COIN, HOOD, CRCL, IREN, BMNR) are left out: round-the-clock trading has already closed the gap there.
+        </p>
+        <div className="rules">
+          <span className="rule">decide 9:{String(30 + R.decide_after_min).padStart(2, "0")}-9:{30 + R.decide_until_min} ET · weeknights only</span>
+          <span className="rule">beta: {R.beta_days}-day OLS on the coin</span>
+          <span className="rule rule--gain">|unpriced| ≥ {num(R.min_unpriced * 100, 0)}% → trade the laggard</span>
+          <span className="rule">{Math.round(R.size_frac * 100)}% of equity each · max {R.max_positions} a day</span>
+          <span className="rule">hedge: beta × stake in BTC / ETH / SOL perp</span>
+          <span className="rule rule--loss">costs: {R.stock_cost_bps} bp/side stock · {R.hedge_fee_bps} bp/side hedge · {R.borrow_bps_day} bp/day borrow</span>
+          <span className="rule">out at the close</span>
+        </div>
+        <p className="muted">
+          {F.selfcheck || "self-check pending"}
+          {Object.keys(F.source_errors).length ? ` · source errors: ${Object.entries(F.source_errors).map(([a, b]) => `${a} ${b}`).join(", ")}` : ""}
+          {" · "}longs {F.by_side.long?.n ?? 0} (<Pol v={F.by_side.long?.pnl ?? 0}>{signedUsd(F.by_side.long?.pnl ?? 0)}</Pol>), shorts {F.by_side.short?.n ?? 0} (<Pol v={F.by_side.short?.pnl ?? 0}>{signedUsd(F.by_side.short?.pnl ?? 0)}</Pol>)
+        </p>
+      </section>
+
+      <div className="grid2">
+        <section className="panel">
+          <h2>Today&apos;s gaps <span className="panel__hint">{F.today.date} · {F.today.status}{F.today.why ? ` · ${F.today.why}` : ""}</span></h2>
+          {cands.length === 0 ? <p className="empty">Measured at 9:32 ET on weeknights.</p> : (
+            <table>
+              <thead><tr><th>Stock</th><th className="r">Beta</th><th className="r">Gap</th><th className="r">Coin × beta</th><th className="r">Unpriced</th><th>Call</th></tr></thead>
+              <tbody>
+                {cands.map((c) => (
+                  <tr key={c.symbol}>
+                    <td className="coin">{c.symbol} <span className="muted">{c.coin}</span></td>
+                    <td className="r">{c.beta === null ? "—" : num(c.beta, 2)}</td>
+                    <td className="r">{c.gap === undefined ? "—" : `${num(c.gap * 100, 1)}%`}</td>
+                    <td className="r">{c.coin_move === undefined || c.beta === null ? "—" : `${num(c.coin_move * c.beta * 100, 1)}%`}</td>
+                    <td className="r">{c.unpriced === undefined ? "—" : <Pol v={c.unpriced}>{`${c.unpriced > 0 ? "+" : ""}${num(c.unpriced * 100, 1)}%`}</Pol>}</td>
+                    <td className="why">{c.taken ? <b>{c.taken}</b> : c.skip}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+        <section className="panel">
+          <h2>Last trades <span className="panel__hint">open → close, net of costs</span></h2>
+          {F.trades.length === 0 ? <p className="empty">No trade closed yet.</p> : (
+            <table>
+              <thead><tr><th>Day</th><th>Stock</th><th>Side</th><th className="r">Unpriced</th><th className="r">Stake</th><th className="r">P&amp;L</th></tr></thead>
+              <tbody>
+                {F.trades.slice(0, 14).map((t, i) => (
+                  <tr key={i}>
+                    <td className="muted">{t.date.slice(5)}</td><td className="coin">{t.symbol}</td><td>{t.side}</td>
+                    <td className="r">{num(Number(t.unpriced) * 100, 1)}%</td><td className="r">{usd(Number(t.stake))}</td>
+                    <td className="r"><Pol v={Number(t.pnl)}>{signedUsd(Number(t.pnl))}</Pol></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <h2 style={{ marginTop: 14 }}>Days</h2>
+          <table>
+            <tbody>
+              {F.days.map((d) => <tr key={d.date}><td className="muted">{d.date}</td><td>{d.status}</td><td className="why">{d.taken ? `${d.taken} trades` : d.why}</td></tr>)}
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <section className="panel">
+        <h2>The research <span className="panel__hint">why this book exists, and what didn&apos;t make it</span></h2>
+        <table>
+          <tbody>
+            {Object.entries(F.research).map(([k, v]) => <tr key={k}><td className="muted">{k.replace(/_/g, " ")}</td><td>{v}</td></tr>)}
+          </tbody>
+        </table>
+        {F.events.length > 0 && <pre className="desk-report" style={{ marginTop: 12 }}>{F.events.slice(0, 12).join("\n")}</pre>}
+      </section>
+    </>
+  );
+}
 
 function PumpHeader({ p, D, now }: { p: Performance; D: DeskInfo; now: number }) {
   const P = D.pump as PumpInfo;
@@ -2047,6 +2186,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const deskInfo = (deskPerf as unknown as { desk?: DeskInfo } | undefined)?.desk;
   const isTrench = slideKey === "trenchkit";
   const isPump = slideKey === "pumpdesk";
+  const isFade = slideKey === "openfade";
   const isOne = slideKey === "onecoin";
   const isTheta = slideKey === "thetashop";
   const thetaPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.thetashop;
@@ -2057,6 +2197,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const trenchInfo = (trenchPerf as unknown as { desk?: DeskInfo } | undefined)?.desk;
   const pumpPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.pumpdesk;
   const pumpInfo = (pumpPerf as unknown as { desk?: DeskInfo } | undefined)?.desk;
+  const fadePerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.openfade;
+  const fadeInfo = (fadePerf as unknown as { fade?: FadeInfo } | undefined)?.fade;
   const isMeta = slideKey === "metasniper" || isRug || isHive || isCopy;
   const metaPerf = data.perf.strategies?.metasniper;
   const rugPerf = data.perf.strategies?.rugsniper;
@@ -2066,7 +2208,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const ideaPerf = slideKey.startsWith("idea:") ? data.perf.strategies?.[slideKey as `idea:${string}`] : undefined;
   const idea = ideaPerf?.idea;
   const isIdea = !!(ideaPerf && idea);
-  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isRug && rugPerf ? rugPerf : isHive && hivePerf ? hivePerf : isCopy && copyPerf ? copyPerf : isLot && lotPerf ? lotPerf : isMoon && moonPerf ? moonPerf : isDesk && deskPerf ? deskPerf : isTrench && trenchPerf ? trenchPerf : isPump && pumpPerf ? pumpPerf : isOne && onePerf ? onePerf : isTheta && thetaPerf ? thetaPerf : isMeta && metaPerf ? metaPerf
+  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isRug && rugPerf ? rugPerf : isHive && hivePerf ? hivePerf : isCopy && copyPerf ? copyPerf : isLot && lotPerf ? lotPerf : isMoon && moonPerf ? moonPerf : isDesk && deskPerf ? deskPerf : isTrench && trenchPerf ? trenchPerf : isPump && pumpPerf ? pumpPerf : isFade && fadePerf ? fadePerf : isOne && onePerf ? onePerf : isTheta && thetaPerf ? thetaPerf : isMeta && metaPerf ? metaPerf
     : isIdea ? (ideaPerf as Performance) : data.perf;
   const meta = isMeta && p.sniper ? (p.sniper as unknown as MetaInfo) : undefined;
   const kal = isKalshi ? p.kalshi : undefined;
@@ -2117,6 +2259,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               : isKalshi ? "paper trading · Kalshi prediction markets · public order books + trade tape"
               : isTheta ? "paper trading · Deribit BTC options · a weekly iron condor, paid when Bitcoin stays in a range"
               : isOne ? "paper trading · Hyperliquid · one rising coin at a time, held until it should be dropped or it peaks"
+              : isFade ? "paper trading · US crypto stocks at the open vs their coin overnight · hedged in Hyperliquid perps"
               : isPump ? "paper trading · pump.fun graduates on PumpSwap · five agents: scanner, 8-layer auditor, Jev analyst, executor, risk"
               : isTrench ? "paper trading · Solana memecoins · the trencher's free tools as code, then a 10-minute holder-growth confirm"
               : isDesk ? "paper trading · Solana memecoins · four agents, four steps: scan, verify (code, then Grok on X), execute, exit"
@@ -2153,6 +2296,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : s.key === "grokdesk" ? (deskPerf?.equity ?? null)
           : s.key === "trenchkit" ? (trenchPerf?.equity ?? null)
           : s.key === "pumpdesk" ? (pumpPerf?.equity ?? null)
+          : s.key === "openfade" ? (fadePerf?.equity ?? null)
           : s.key === "onecoin" ? (onePerf?.equity ?? null)
           : s.key === "thetashop" ? (thetaPerf?.equity ?? null)
             : data.perf.strategies?.[s.key as `idea:${string}`]?.equity ?? null)} />
@@ -2182,7 +2326,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
                 </div>
               </>
             ) : (<>
-            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isRug ? "Strategy 23 paper equity" : isHive ? "Strategy 33 paper equity" : isDesk ? "Strategy 34 paper equity" : isTrench ? "Strategy 36 paper equity" : isPump ? "Strategy 44 paper equity" : isOne ? `Strategy 38 · round ${oneInfo?.round ?? 1} equity` : isTheta ? "Strategy 41 paper equity" : isCopy ? "Strategy 25 paper equity" : isLot ? "Strategy 26 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
+            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isRug ? "Strategy 23 paper equity" : isHive ? "Strategy 33 paper equity" : isDesk ? "Strategy 34 paper equity" : isTrench ? "Strategy 36 paper equity" : isPump ? "Strategy 44 paper equity" : isFade ? "Strategy 46 paper equity" : isOne ? `Strategy 38 · round ${oneInfo?.round ?? 1} equity` : isTheta ? "Strategy 41 paper equity" : isCopy ? "Strategy 25 paper equity" : isLot ? "Strategy 26 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
             <div className="hero__equity">{usd(p.equity)}</div>
             <div className="hero__pnl">
               <Pol v={p.pnl}>{arrow(p.pnl)} {signedUsd(p.pnl)} ({pct(p.pnl_pct, 2, true)})</Pol>
@@ -2214,6 +2358,13 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               <span><i className="swatch swatch--held" /> highest price since the entry</span>
               <span><i className="swatch swatch--gain" /> give-back exit (armed at +4%)</span>
               <span className="legend__note">ring: today&apos;s strongest liquid Hyperliquid movers, pillar height = 4-hour rise · middle: the one coin held, the orb climbs at the live price from the stop ring past the entry line · right: one red disc per round that fell under $5k · drag to orbit, hover a pillar</span>
+            </div>
+          ) : isFade ? (
+            <div className="legend" aria-label="Legend">
+              <span><i className="swatch swatch--gain" /> opened up</span>
+              <span><i className="swatch swatch--loss" /> opened down</span>
+              <span><i className="swatch swatch--held" /> where the coin&apos;s overnight move × beta said it should open</span>
+              <span className="legend__note">one row per stock, measured at 9:32 ET: the bar is the opening gap, the gold tick is the coin-implied gap, the dashed gold line is the unpriced part · past the threshold the book takes the laggard side until the close</span>
             </div>
           ) : isPump ? (
             <div className="legend" aria-label="Legend">
@@ -2335,6 +2486,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : isTheta ? "3D payoff tent of the open Bitcoin iron condor, with Bitcoin's price now"
           : isOne ? "3D field of rising Hyperliquid coins around the one coin held, with its stop, peak and give-back levels"
           : isTrench ? "3D rail: every recent lead riding from GeckoTerminal through the free tools to the confirm"
+          : isFade ? "Gap board: each crypto stock's opening gap against the gap its coin's overnight move implies"
           : isPump ? "3D rail: every recent pump.fun graduate riding from the scanner through the 8-layer audit and Jev's analyst"
           : isDesk ? "3D trading desk rail: every recent lead riding from its scanner to the step where it ended"
           : isMoon ? "3D launch towers: each lane's $100 try climbing log-scale rungs toward $1M, with its bust and take-profit levels"
@@ -2386,6 +2538,11 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         {visited.onecoin && oneInfo && (
           <div className={`scene__layer ${isOne ? "scene__layer--on" : ""}`} aria-hidden={!isOne}>
             <OneCoinScene info={oneInfo} active={isOne} />
+          </div>
+        )}
+        {visited.openfade && fadeInfo && (
+          <div className={`scene__layer ${isFade ? "scene__layer--on" : ""}`} aria-hidden={!isFade}>
+            <FadeBoard F={fadeInfo} />
           </div>
         )}
         {visited.pumpdesk && pumpInfo && (
@@ -2457,6 +2614,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : isDesk && deskInfo ? <DeskPanels p={p} D={deskInfo} now={now} />
           : isTrench && trenchInfo ? <DeskPanels p={p} D={trenchInfo} now={now} />
           : isPump && pumpInfo ? <DeskPanels p={p} D={pumpInfo} now={now} />
+          : isFade && fadeInfo ? <FadePanels p={p} F={fadeInfo} />
           : isOne && oneInfo ? <OnePanels p={p} O={oneInfo} now={now} />
           : isTheta && thetaInfo ? <ThetaPanels p={p} T={thetaInfo} now={now} />
           : isIdea && idea ? <IdeaPanels p={p} idea={idea} /> : <TrendPanels p={p} />}
@@ -2610,6 +2768,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             ? "Paper trading only — no order reaches Deribit. Every leg is priced at Deribit's live bid (selling) or ask (buying) with Deribit's option fee, and an unclosed condor settles at Deribit's 08:00 UTC delivery price. The most a condor can lose is fixed when it opens. Not investment advice."
             : isOne
             ? "Paper trading only — no order reaches Hyperliquid. Buys and sells walk Hyperliquid's live order book and pay the 4.5 bp taker fee; funding is paid or received every hour at the exchange's rate. 1x long, no leverage. The total counts every $10k round put in. Not investment advice."
+            : isFade
+            ? "Paper trading only — no broker, no account, no order. Stock fills use Yahoo's 1-minute price when the book decides (a minute or two after the opening auction) plus 10 bp a side; the coin hedge fills at Hyperliquid's mid plus 4.5 bp a side; shorts pay 5 bp a day to borrow. Small-cap borrow can be costlier or unavailable in real life. The edge was ~26 bp a trade in the backtest and disappears at 0.5% costs. Not investment advice."
             : isPump
             ? "Paper trading only — no key that can move money, no wallet, no FOMO account, no real order. Fills are simulated on the real PumpSwap pool: AMM price impact, FOMO's fee schedule with the 10% referral discount, and the 0.25% pool fee; FOMO pays gas. 8 clean layers make a rug rarer, not impossible, and most graduates still go to zero. Not investment advice."
             : isTrench
