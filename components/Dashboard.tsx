@@ -7,7 +7,7 @@ import BacktestLab, { SLIDE_TO_BACKTEST } from "./BacktestLab";
 import type { CopyBlock, CopyInfo } from "./CopyScene";
 import type { LotInfo } from "./LotScene";
 import { reachedAtLeast, type MoonInfo } from "./MoonshotScene";
-import type { DeskInfo, DeskPosition, PumpInfo, TrenchInfo } from "./DeskScene";
+import type { BotsInfo, BotStats, DeskInfo, DeskPosition, EarlyInfo, PumpInfo, TrenchInfo } from "./DeskScene";
 import type { OneInfo } from "./OneCoinScene";
 import type { ThetaInfo } from "./ThetaScene";
 import { ago, arrow, num, pct, polarity, price, signedUsd, usd, when } from "@/lib/format";
@@ -118,6 +118,16 @@ function buildSlides(perf: Performance): Slide[] {
     ? [{ key: "openfade", n: 46, name: "Open Fade",
         blurb: "crypto stocks vs their coin at the 9:30 open · the gap prices ~90% of the coin's overnight move × beta · ≥ 2% left unpriced → trade the laggard, hedged in the coin's Hyperliquid perp, out at the close · weeknights only · 13 smaller miners + treasury companies · paper, own $10k" }]
     : [];
+  const earlyPerf = (perf.strategies as Record<string, Performance | undefined> | undefined)?.earlywallets;
+  const early: Slide[] = (earlyPerf as unknown as { desk?: { early?: unknown } } | undefined)?.desk?.early
+    ? [{ key: "earlywallets", n: 47, name: "Early Wallets",
+        blurb: "the first 20 buyers of past viral pump.fun coins (FARTCOIN, GOAT, PNUT…), kept if active in 30 days and not bots · 3+ of them buying one coin within 12 h, scored out of 10, entered at 9+ · out when half of them sell · paper, own $10k" }]
+    : [];
+  const botsPerf = (perf.strategies as Record<string, Performance | undefined> | undefined)?.pumpbots;
+  const bots: Slide[] = (botsPerf as unknown as { desk?: { bots?: unknown } } | undefined)?.desk?.bots
+    ? [{ key: "pumpbots", n: 48, name: "Pump Bots",
+        blurb: "zostaff's pump.fun bots on paper · SNIPER: dev bought ≥ 0.5 SOL → 0.1 SOL on the curve, out at 1.5× / 0.7× / 30 s · GRADUATION: curve ≥ 92% sold → out on the first PumpSwap price · priced on the real curve after our real delay · own $1k" }]
+    : [];
   const onePerf = (perf.strategies as Record<string, Performance | undefined> | undefined)?.onecoin;
   const one: Slide[] = (onePerf as unknown as { onecoin?: unknown } | undefined)?.onecoin
     ? [{ key: "onecoin", n: 38, name: "One Coin",
@@ -128,7 +138,7 @@ function buildSlides(perf: Performance): Slide[] {
     ? [{ key: "thetashop", n: 41, name: "Theta Shop",
         blurb: "the only options book · sells a weekly Bitcoin iron condor on Deribit · paid when BTC stays in a range, loss capped the moment it opens · take profit at half the credit, stop at 2x · paper, own $10k" }]
     : [];
-  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...hive, ...copy, ...lot, ...moon, ...desk, ...trench, ...pump, ...fade, ...one, ...theta];
+  return [...BASE_SLIDES, ...ideas, ...kalshi, ...meta, ...rug, ...hive, ...copy, ...lot, ...moon, ...desk, ...trench, ...pump, ...fade, ...early, ...bots, ...one, ...theta];
 }
 
 function Pol({ v, children }: { v: number; children: React.ReactNode }) {
@@ -469,6 +479,177 @@ function FadePanels({ p, F }: { p: Performance; F: FadeInfo }) {
   );
 }
 
+function EarlyHeader({ p, D, now }: { p: Performance; D: DeskInfo; now: number }) {
+  const E = D.early as EarlyInfo;
+  const R = E.rules;
+  const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
+  return (
+    <>
+      <section className="panel">
+        <h2>Strategy 47 <span className="panel__hint">Early Wallets · follow the first buyers of past viral coins · paper · own {usd(p.start_balance, false)}</span></h2>
+        <p className="strategy__what">
+          The &quot;100x shortcut&quot; post, done by code over your own Solana RPC. For each past viral pump.fun coin (FARTCOIN,
+          GOAT, PNUT, CHILLGUY and others), the book reads the oldest transactions on its bonding curve and keeps the first
+          {" "}{R.early_n} wallets that bought, leaving out the creator. Wallets that haven&apos;t traded in {R.active_days} days
+          are dropped, and so are bots (a median gap of under {R.bot_gap_s} seconds between trades). Every 2 minutes it
+          reads each remaining wallet&apos;s new transactions. When {R.min_wallets} or more of them buy the same coin within
+          {" "}{R.signal_window_h} hours, it scores the coin out of 10 and buys only at {R.min_score} or above. The post&apos;s
+          warning is that the sell decides the profit, so the main exit follows the wallets: when half of them sell, the
+          book sells.
+        </p>
+        <div className="rules">
+          <span className="rule">first {R.early_n} buyers · active in {R.active_days} d · no bots</span>
+          <span className="rule">{R.min_wallets}+ wallets on one coin in {R.signal_window_h} h</span>
+          <span className="rule rule--gain">score ≥ {R.min_score}/10 to enter</span>
+          <span className="rule">{Math.round(R.size_pct * 100)}% of cash</span>
+          <span className="rule rule--loss">half the wallets sold → out</span>
+          <span className="rule rule--loss">stop {R.hard_stop_pct}%</span>
+          <span className="rule rule--gain">+100% sells half · trail {R.trail_pct}%</span>
+          <span className="rule">{Math.round(R.time_stop_min / 1440)} days without +{R.time_stop_min_pct}% → out</span>
+        </div>
+        <p className="muted">
+          Score: 3 wallets 1 · a 4th 1 · none sold 1 · {R.min_combined_sol}+ SOL in 1 · wallets from 2+ viral coins 1 ·
+          liquidity ≥ ${num(R.score_min_liq_usd / 1000, 0)}K 1 · Rugcheck clean 1 · top 10 ≤ {R.score_max_top10_pct}% 1 ·
+          price ≤ {R.max_chase}× their entry 1 · under {R.max_age_d} days old 1
+        </p>
+      </section>
+
+      <div className="grid2">
+        <section className="panel">
+          <h2>The viral coins <span className="panel__hint">steps 1-2: whose first buyers are followed</span></h2>
+          <table>
+            <thead><tr><th>Coin</th><th>Status</th><th className="r">Early buyers</th><th className="r">Watched</th></tr></thead>
+            <tbody>
+              {E.coins.length === 0 && <tr><td className="muted" colSpan={4}>reading the first curve…</td></tr>}
+              {E.coins.map((c) => (
+                <tr key={c.symbol}><td className="coin">{c.symbol}</td><td className="why" title={c.why}>{c.status === "done" ? "done" : `${c.status} · ${c.why}`}</td>
+                  <td className="r">{c.early}</td><td className="r">{c.watch}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+        <section className="panel">
+          <h2>Coins they bought together <span className="panel__hint">steps 6-7: {R.min_wallets}+ wallets, scored</span></h2>
+          {E.candidates.length === 0 ? <p className="empty">No coin has {R.min_wallets}+ of these wallets buying it yet.</p> : (
+            <table>
+              <thead><tr><th>Coin</th><th className="r">Wallets</th><th className="r">SOL in</th><th className="r">Score</th><th>Missed</th></tr></thead>
+              <tbody>
+                {E.candidates.map((c) => (
+                  <tr key={c.mint}>
+                    <td className="coin">{c.symbol}</td><td className="r">{c.wallets.length}{c.sold.length ? ` (${c.sold.length} sold)` : ""}</td>
+                    <td className="r">{num(c.sol, 1)}</td>
+                    <td className="r"><span className={`pol pol--${c.score >= R.min_score ? "gain" : "loss"}`}>{c.score}/10</span></td>
+                    <td className="why" title={c.parts.join(", ")}>{c.parts.filter((x) => x.startsWith("-")).map((x) => x.slice(3)).join(", ") || "nothing"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      </div>
+
+      <section className="panel">
+        <h2>The wallets <span className="panel__hint">steps 3-5 · {Object.entries(E.status_counts).map(([k, v]) => `${v} ${k}`).join(" · ")}</span></h2>
+        <table>
+          <thead><tr><th>Wallet</th><th>Early on</th><th>Status</th><th className="r">Median gap</th><th className="r">Last trade</th><th className="r">Buys 24 h</th></tr></thead>
+          <tbody>
+            {E.wallets.slice(0, 20).map((w) => (
+              <tr key={w.wallet}>
+                <td className="coin"><a href={`https://solscan.io/account/${w.wallet}`} target="_blank" rel="noreferrer">{short(w.wallet)}</a></td>
+                <td className="muted">{w.coins.join(", ")}</td><td>{w.status}</td>
+                <td className="r">{w.gap_s === null ? "—" : `${num(w.gap_s, 0)}s`}</td>
+                <td className="r">{w.last_tx_ms ? ago(w.last_tx_ms, now) : "—"}</td><td className="r">{w.buys_24h}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    </>
+  );
+}
+
+function BotsHeader({ p, D }: { p: Performance; D: DeskInfo; now: number }) {
+  const Bo = D.bots as BotsInfo;
+  const R = Bo.rules;
+  const row = (name: string, b: BotStats) => (
+    <tr key={name}><td><b>{name}</b></td><td className="r">{b.buys}</td><td className="r">{b.open}</td><td className="r">{b.closed}</td>
+      <td className="r">{b.win_rate === null ? "—" : `${Math.round(b.win_rate * 100)}%`}</td>
+      <td className="r"><Pol v={b.pnl}>{signedUsd(b.pnl)}</Pol></td></tr>
+  );
+  return (
+    <>
+      <section className="panel">
+        <h2>Strategy 48 <span className="panel__hint">Pump Bots · zostaff&apos;s pump.fun sniper + graduation sniper · paper · own {usd(p.start_balance, false)}</span></h2>
+        <p className="strategy__what">
+          Two of the seven bots from zostaff&apos;s pump.fun teardown, the two with their own trading rules. SNIPER hears
+          every new pump.fun token on PumpPortal&apos;s free create stream. If the dev bought at least {R.min_dev_buy_sol} SOL,
+          it buys {R.buy_sol} SOL on the bonding curve and sells at {R.take_profit}×, at {R.stop_loss}×, or after
+          {" "}{R.timeout_s} seconds. GRADUATION follows the curves that are filling up. At {Math.round(R.grad_progress * 100)}%
+          sold it buys {Math.round(R.grad_stake_frac * 100)}% of cash and sells on the first PumpSwap price after the
+          token migrates. Unlike the article&apos;s dry runs, the fills here are honest: the price is read from the real curve
+          account after the bot&apos;s real delay (no creation-slot fills), using constant-product math, plus pump.fun&apos;s
+          {" "}{num(R.curve_fee * 100, 2)}% fee and {R.priority_sol} SOL of priority fee and tip per transaction.
+        </p>
+        <div className="rules">
+          <span className="rule">dev buy ≥ {R.min_dev_buy_sol} SOL → buy {R.buy_sol} SOL</span>
+          <span className="rule rule--gain">take profit {R.take_profit}×</span>
+          <span className="rule rule--loss">stop {R.stop_loss}×</span>
+          <span className="rule">out after {R.timeout_s}s · max {R.max_snipes} open · {R.cooldown_s}s apart</span>
+          <span className="rule">graduation: curve ≥ {Math.round(R.grad_progress * 100)}% → out on PumpSwap · stop {R.grad_stop}× · {R.grad_timeout_min} min max</span>
+        </div>
+        <p className="muted">
+          Stream: {Bo.feed.connected ? "connected" : `down (${Bo.feed.last_error})`} · {Bo.feed.creates} new tokens heard · {Bo.tracked} curves on the graduation watch
+          {Bo.sol_usd ? ` · SOL $${num(Bo.sol_usd, 2)}` : ""}
+          {Object.keys(Bo.filtered).length ? ` · filtered: ${Object.entries(Bo.filtered).map(([k, v]) => `${k} ${v}`).join(", ")}` : ""}
+        </p>
+      </section>
+
+      <div className="grid2">
+        <section className="panel">
+          <h2>The two bots <span className="panel__hint">paper results so far</span></h2>
+          <table>
+            <thead><tr><th>Bot</th><th className="r">Buys</th><th className="r">Open</th><th className="r">Closed</th><th className="r">Win rate</th><th className="r">P&amp;L</th></tr></thead>
+            <tbody>{row("SNIPER", Bo.sniper)}{row("GRADUATION", Bo.graduation)}</tbody>
+          </table>
+          <h2 style={{ marginTop: 14 }}>Last snipes</h2>
+          {Bo.recent.length === 0 ? <p className="empty">Waiting for a dev buy of {R.min_dev_buy_sol}+ SOL.</p> : (
+            <table>
+              <thead><tr><th>Token</th><th className="r">Dev buy</th><th className="r">Paid vs create</th><th>Result</th></tr></thead>
+              <tbody>
+                {Bo.recent.slice(0, 10).map((r) => (
+                  <tr key={`${r.mint}${r.ms}`}>
+                    <td className="coin"><a href={`https://pump.fun/coin/${r.mint}`} target="_blank" rel="noreferrer">{r.symbol}</a></td>
+                    <td className="r">{num(r.dev_sol, 2)} SOL</td>
+                    <td className="r">{r.create_sol ? `${num(r.entry_sol / r.create_sol, 2)}×` : "—"}</td>
+                    <td className="why">{r.result}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+        <section className="panel">
+          <h2>Closest to graduating <span className="panel__hint">curves on the watch, most sold first</span></h2>
+          {Bo.near_grad.length === 0 ? <p className="empty">No curve on the watch yet.</p> : (
+            <table>
+              <thead><tr><th>Token</th><th className="r">Sold</th><th className="r">Real SOL</th><th className="r">Age</th></tr></thead>
+              <tbody>
+                {Bo.near_grad.map((t) => (
+                  <tr key={t.mint}>
+                    <td className="coin"><a href={`https://pump.fun/coin/${t.mint}`} target="_blank" rel="noreferrer">{t.symbol}</a></td>
+                    <td className="r"><span className={`pol pol--${t.progress >= R.grad_progress ? "gain" : "flat"}`}>{Math.round(t.progress * 100)}%</span></td>
+                    <td className="r">{num(t.real_sol, 1)}</td><td className="r">{num(t.age_min, 0)} min</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      </div>
+    </>
+  );
+}
+
 function PumpHeader({ p, D, now }: { p: Performance; D: DeskInfo; now: number }) {
   const P = D.pump as PumpInfo;
   const R = P.rules;
@@ -682,10 +863,11 @@ function DeskPanels({ p, D, now }: { p: Performance; D: DeskInfo; now: number })
   const c = D.config;
   const trench = !!D.trench;
   const pump = !!D.pump;
+  const custom = D.pump ?? D.early ?? D.bots;
   const hardSkips = Math.max(0, r.verified - r.passed_hard);
   const grokSkips = Math.max(0, r.passed_hard - r.fills);
   const positions = (p.positions ?? []) as unknown as DeskPosition[];
-  const funnel: [string, number, string][] = pump ? (D.pump as PumpInfo).funnel : trench ? [
+  const funnel: [string, number, string][] = custom ? custom.funnel : trench ? [
     ["LEADS · GeckoTerminal", r.leads, "Solana trending and new pools"],
     ["CHECK · finished", r.verified, "each coin once: a skip is final"],
     ["CHECK · passed every tool", r.passed_hard, "Rugcheck, trench.bot, dev wallet, kolscan, GeckoTerminal flow"],
@@ -703,7 +885,7 @@ function DeskPanels({ p, D, now }: { p: Performance; D: DeskInfo; now: number })
   const top = Math.max(1, r.leads);
   return (
     <>
-      {pump ? <PumpHeader p={p} D={D} now={now} /> : trench ? <TrenchHeader p={p} D={D} now={now} /> : (
+      {pump ? <PumpHeader p={p} D={D} now={now} /> : D.early ? <EarlyHeader p={p} D={D} now={now} /> : D.bots ? <BotsHeader p={p} D={D} now={now} /> : trench ? <TrenchHeader p={p} D={D} now={now} /> : (
       <section className="panel">
         <h2>Strategy 34 <span className="panel__hint">Grok Desk · SCAN → VERIFY → EXECUTE → EXIT · paper · own {usd(c.start_balance, false)}</span></h2>
         <p className="strategy__what">
@@ -754,7 +936,7 @@ function DeskPanels({ p, D, now }: { p: Performance; D: DeskInfo; now: number })
               </div>
             ))}
           </div>
-          <p className="muted">{pump ? `${r.leads} graduates heard, ${r.fills} bought, ${r.tasks} tasks logged in all.` : `${hardSkips} killed by ${trench ? "a tool" : "a hard check"}, ${grokSkips} ${trench ? "failed the 10-minute confirm" : "turned down by Grok"}, ${r.tasks} tasks logged in all.`}</p>
+          <p className="muted">{D.early || D.bots ? `${r.fills} paper fills, ${r.closes} sells, ${r.tasks} tasks logged in all.` : pump ? `${r.leads} graduates heard, ${r.fills} bought, ${r.tasks} tasks logged in all.` : `${hardSkips} killed by ${trench ? "a tool" : "a hard check"}, ${grokSkips} ${trench ? "failed the 10-minute confirm" : "turned down by Grok"}, ${r.tasks} tasks logged in all.`}</p>
           <h2 style={{ marginTop: 14 }}>Top skip reasons</h2>
           <table>
             <tbody>
@@ -2187,6 +2369,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const isTrench = slideKey === "trenchkit";
   const isPump = slideKey === "pumpdesk";
   const isFade = slideKey === "openfade";
+  const isEarly = slideKey === "earlywallets";
+  const isBots = slideKey === "pumpbots";
   const isOne = slideKey === "onecoin";
   const isTheta = slideKey === "thetashop";
   const thetaPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.thetashop;
@@ -2199,6 +2383,10 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const pumpInfo = (pumpPerf as unknown as { desk?: DeskInfo } | undefined)?.desk;
   const fadePerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.openfade;
   const fadeInfo = (fadePerf as unknown as { fade?: FadeInfo } | undefined)?.fade;
+  const earlyPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.earlywallets;
+  const earlyInfo = (earlyPerf as unknown as { desk?: DeskInfo } | undefined)?.desk;
+  const botsPerf = (data.perf.strategies as Record<string, Performance | undefined> | undefined)?.pumpbots;
+  const botsInfo = (botsPerf as unknown as { desk?: DeskInfo } | undefined)?.desk;
   const isMeta = slideKey === "metasniper" || isRug || isHive || isCopy;
   const metaPerf = data.perf.strategies?.metasniper;
   const rugPerf = data.perf.strategies?.rugsniper;
@@ -2208,7 +2396,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
   const ideaPerf = slideKey.startsWith("idea:") ? data.perf.strategies?.[slideKey as `idea:${string}`] : undefined;
   const idea = ideaPerf?.idea;
   const isIdea = !!(ideaPerf && idea);
-  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isRug && rugPerf ? rugPerf : isHive && hivePerf ? hivePerf : isCopy && copyPerf ? copyPerf : isLot && lotPerf ? lotPerf : isMoon && moonPerf ? moonPerf : isDesk && deskPerf ? deskPerf : isTrench && trenchPerf ? trenchPerf : isPump && pumpPerf ? pumpPerf : isFade && fadePerf ? fadePerf : isOne && onePerf ? onePerf : isTheta && thetaPerf ? thetaPerf : isMeta && metaPerf ? metaPerf
+  const p: Performance = isSniper ? sniperPerf : isKalshi && kalshiPerf ? kalshiPerf : isRug && rugPerf ? rugPerf : isHive && hivePerf ? hivePerf : isCopy && copyPerf ? copyPerf : isLot && lotPerf ? lotPerf : isMoon && moonPerf ? moonPerf : isDesk && deskPerf ? deskPerf : isTrench && trenchPerf ? trenchPerf : isPump && pumpPerf ? pumpPerf : isFade && fadePerf ? fadePerf : isEarly && earlyPerf ? earlyPerf : isBots && botsPerf ? botsPerf : isOne && onePerf ? onePerf : isTheta && thetaPerf ? thetaPerf : isMeta && metaPerf ? metaPerf
     : isIdea ? (ideaPerf as Performance) : data.perf;
   const meta = isMeta && p.sniper ? (p.sniper as unknown as MetaInfo) : undefined;
   const kal = isKalshi ? p.kalshi : undefined;
@@ -2259,6 +2447,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               : isKalshi ? "paper trading · Kalshi prediction markets · public order books + trade tape"
               : isTheta ? "paper trading · Deribit BTC options · a weekly iron condor, paid when Bitcoin stays in a range"
               : isOne ? "paper trading · Hyperliquid · one rising coin at a time, held until it should be dropped or it peaks"
+              : isEarly ? "paper trading · Solana memecoins · the first buyers of past viral coins, followed into what they buy now"
+              : isBots ? "paper trading · pump.fun bonding curves · a dev-buy sniper and a graduation sniper, priced on the real curve"
               : isFade ? "paper trading · US crypto stocks at the open vs their coin overnight · hedged in Hyperliquid perps"
               : isPump ? "paper trading · pump.fun graduates on PumpSwap · five agents: scanner, 8-layer auditor, Jev analyst, executor, risk"
               : isTrench ? "paper trading · Solana memecoins · the trencher's free tools as code, then a 10-minute holder-growth confirm"
@@ -2297,6 +2487,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : s.key === "trenchkit" ? (trenchPerf?.equity ?? null)
           : s.key === "pumpdesk" ? (pumpPerf?.equity ?? null)
           : s.key === "openfade" ? (fadePerf?.equity ?? null)
+          : s.key === "earlywallets" ? (earlyPerf?.equity ?? null)
+          : s.key === "pumpbots" ? (botsPerf?.equity ?? null)
           : s.key === "onecoin" ? (onePerf?.equity ?? null)
           : s.key === "thetashop" ? (thetaPerf?.equity ?? null)
             : data.perf.strategies?.[s.key as `idea:${string}`]?.equity ?? null)} />
@@ -2326,7 +2518,7 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
                 </div>
               </>
             ) : (<>
-            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isRug ? "Strategy 23 paper equity" : isHive ? "Strategy 33 paper equity" : isDesk ? "Strategy 34 paper equity" : isTrench ? "Strategy 36 paper equity" : isPump ? "Strategy 44 paper equity" : isFade ? "Strategy 46 paper equity" : isOne ? `Strategy 38 · round ${oneInfo?.round ?? 1} equity` : isTheta ? "Strategy 41 paper equity" : isCopy ? "Strategy 25 paper equity" : isLot ? "Strategy 26 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
+            <div className="hero__label">{isSniper ? "Sniper paper equity" : isKalshi ? "Strategy 7 paper equity" : isRug ? "Strategy 23 paper equity" : isHive ? "Strategy 33 paper equity" : isDesk ? "Strategy 34 paper equity" : isTrench ? "Strategy 36 paper equity" : isPump ? "Strategy 44 paper equity" : isFade ? "Strategy 46 paper equity" : isEarly ? "Strategy 47 paper equity" : isBots ? "Strategy 48 paper equity" : isOne ? `Strategy 38 · round ${oneInfo?.round ?? 1} equity` : isTheta ? "Strategy 41 paper equity" : isCopy ? "Strategy 25 paper equity" : isLot ? "Strategy 26 paper equity" : isMeta ? "Strategy 12 paper equity" : isIdea ? `Strategy ${idea?.n} paper equity` : "Paper equity"}</div>
             <div className="hero__equity">{usd(p.equity)}</div>
             <div className="hero__pnl">
               <Pol v={p.pnl}>{arrow(p.pnl)} {signedUsd(p.pnl)} ({pct(p.pnl_pct, 2, true)})</Pol>
@@ -2358,6 +2550,13 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
               <span><i className="swatch swatch--held" /> highest price since the entry</span>
               <span><i className="swatch swatch--gain" /> give-back exit (armed at +4%)</span>
               <span className="legend__note">ring: today&apos;s strongest liquid Hyperliquid movers, pillar height = 4-hour rise · middle: the one coin held, the orb climbs at the live price from the stop ring past the entry line · right: one red disc per round that fell under $5k · drag to orbit, hover a pillar</span>
+            </div>
+          ) : isEarly || isBots ? (
+            <div className="legend" aria-label="Legend">
+              <span><i className="swatch swatch--carry-low" /> {isEarly ? "coin 3+ early wallets bought" : "token that passed the filter"}</span>
+              <span><i className="swatch swatch--loss" /> {isEarly ? "scored under 9" : "skipped"}</span>
+              <span><i className="swatch swatch--gain" /> filled · open position</span>
+              <span className="legend__note">{isEarly ? "one rail: EARLY-WALLETS signals → the 10-point score → EXECUTE → EXIT (half the wallets sold, stop, trail, time)" : "one rail: SNIPER and GRADUATION leads → the filter → EXECUTE → EXIT (take profit, stop, timeout, graduation)"} · hover a bead or a position</span>
             </div>
           ) : isFade ? (
             <div className="legend" aria-label="Legend">
@@ -2486,6 +2685,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : isTheta ? "3D payoff tent of the open Bitcoin iron condor, with Bitcoin's price now"
           : isOne ? "3D field of rising Hyperliquid coins around the one coin held, with its stop, peak and give-back levels"
           : isTrench ? "3D rail: every recent lead riding from GeckoTerminal through the free tools to the confirm"
+          : isEarly ? "3D rail: coins that several early wallets bought, through the score to the exit"
+          : isBots ? "3D rail: sniped and graduating pump.fun tokens through the filter to the exit"
           : isFade ? "Gap board: each crypto stock's opening gap against the gap its coin's overnight move implies"
           : isPump ? "3D rail: every recent pump.fun graduate riding from the scanner through the 8-layer audit and Jev's analyst"
           : isDesk ? "3D trading desk rail: every recent lead riding from its scanner to the step where it ended"
@@ -2538,6 +2739,18 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
         {visited.onecoin && oneInfo && (
           <div className={`scene__layer ${isOne ? "scene__layer--on" : ""}`} aria-hidden={!isOne}>
             <OneCoinScene info={oneInfo} active={isOne} />
+          </div>
+        )}
+        {visited.earlywallets && earlyInfo && (
+          <div className={`scene__layer ${isEarly ? "scene__layer--on" : ""}`} aria-hidden={!isEarly}>
+            <DeskScene info={earlyInfo} positions={(earlyPerf?.positions ?? []) as unknown as DeskPosition[]} active={isEarly}
+              stations={{ verify: "SCORE · out of 10", second: "SCORE · under 9", secondRe: /^score/ }} />
+          </div>
+        )}
+        {visited.pumpbots && botsInfo && (
+          <div className={`scene__layer ${isBots ? "scene__layer--on" : ""}`} aria-hidden={!isBots}>
+            <DeskScene info={botsInfo} positions={(botsPerf?.positions ?? []) as unknown as DeskPosition[]} active={isBots}
+              stations={{ verify: "FILTER", second: "CURVE READ", secondRe: /^filter/ }} />
           </div>
         )}
         {visited.openfade && fadeInfo && (
@@ -2615,6 +2828,8 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
           : isTrench && trenchInfo ? <DeskPanels p={p} D={trenchInfo} now={now} />
           : isPump && pumpInfo ? <DeskPanels p={p} D={pumpInfo} now={now} />
           : isFade && fadeInfo ? <FadePanels p={p} F={fadeInfo} />
+          : isEarly && earlyInfo ? <DeskPanels p={p} D={earlyInfo} now={now} />
+          : isBots && botsInfo ? <DeskPanels p={p} D={botsInfo} now={now} />
           : isOne && oneInfo ? <OnePanels p={p} O={oneInfo} now={now} />
           : isTheta && thetaInfo ? <ThetaPanels p={p} T={thetaInfo} now={now} />
           : isIdea && idea ? <IdeaPanels p={p} idea={idea} /> : <TrendPanels p={p} />}
@@ -2768,6 +2983,10 @@ export default function Dashboard({ initial }: { initial: PerfResponse }) {
             ? "Paper trading only — no order reaches Deribit. Every leg is priced at Deribit's live bid (selling) or ask (buying) with Deribit's option fee, and an unclosed condor settles at Deribit's 08:00 UTC delivery price. The most a condor can lose is fixed when it opens. Not investment advice."
             : isOne
             ? "Paper trading only — no order reaches Hyperliquid. Buys and sells walk Hyperliquid's live order book and pay the 4.5 bp taker fee; funding is paid or received every hour at the exchange's rate. 1x long, no leverage. The total counts every $10k round put in. Not investment advice."
+            : isEarly
+            ? "Paper trading only — no wallet, no key, no order. The wallets are read from public on-chain data over your own RPC; fills are simulated on the real DexScreener pool (AMM impact, 0.25% DEX fee, $0.10 priority fee, 1% latency slippage). Following a wallet's buy is easy; matching its exit and size is not, and most memecoins go to zero. Not investment advice."
+            : isBots
+            ? "Paper trading only — no wallet, no Jito bundle, no order. Each fill is priced on the real pump.fun curve account as read after the bot's real delay, with constant-product math, pump.fun's 1.25% fee and 0.0015 SOL of priority fee and tip per transaction. Real snipers compete for the creation slot; this one never gets it. Not investment advice."
             : isFade
             ? "Paper trading only — no broker, no account, no order. Stock fills use Yahoo's 1-minute price when the book decides (a minute or two after the opening auction) plus 10 bp a side; the coin hedge fills at Hyperliquid's mid plus 4.5 bp a side; shorts pay 5 bp a day to borrow. Small-cap borrow can be costlier or unavailable in real life. The edge was ~26 bp a trade in the backtest and disappears at 0.5% costs. Not investment advice."
             : isPump

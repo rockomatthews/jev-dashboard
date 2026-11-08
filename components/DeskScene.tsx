@@ -42,6 +42,24 @@ export type PumpInfo = {
   layer8: { down: boolean; down_ms: number; ok_ms: number };
   runners: number; rules: Record<string, number>; below_min: string;
 };
+export type BotStats = { buys: number; closed: number; wins: number; win_rate: number | null; pnl: number; open: number };
+export type EarlyInfo = {
+  funnel: [string, number, string][];
+  coins: { symbol: string; mint: string; status: string; why: string; early: number; watch: number }[];
+  wallets: { wallet: string; coins: string[]; status: string; gap_s: number | null; last_tx_ms: number; buys_24h: number }[];
+  status_counts: Record<string, number>;
+  candidates: { mint: string; symbol: string; ms: number; score: number; parts: string[]; wallets: string[]; sold: string[]; sol: number; liq: number | null; why: string }[];
+  recent_buys: { wallet: string; mint: string; ms: number; sol: number; tokens: number }[];
+  follow: Record<string, { wallets: string[]; sold: string[] }>;
+  rules: Record<string, number>;
+};
+export type BotsInfo = {
+  funnel: [string, number, string][];
+  sniper: BotStats; graduation: BotStats; filtered: Record<string, number>; tracked: number;
+  near_grad: { symbol: string; mint: string; progress: number; real_sol: number; age_min: number }[];
+  recent: { ms: number; symbol: string; mint: string; dev_sol: number; entry_sol: number; create_sol: number; result: string }[];
+  feed: { connected: boolean; creates: number; last_error: string }; sol_usd: number; rules: Record<string, number>;
+};
 export type DeskInfo = {
   report: DeskReport; report_text: string; tasks: DeskTask[]; events: string[];
   session: { day: string; start: number; halted: boolean; halt_at: number };
@@ -49,6 +67,8 @@ export type DeskInfo = {
     last_error: string; calls_last_hour: number; budget_per_hour: number } | null;
   trench?: TrenchInfo;
   pump?: PumpInfo;
+  early?: EarlyInfo;
+  bots?: BotsInfo;
   source_errors: Record<string, number>;
   config: {
     model: string; start_balance: number; scanners: string[]; leads_per_run: number; scan_every_s: number; whales: number;
